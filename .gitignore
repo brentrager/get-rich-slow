@@ -1,5 +1,8 @@
 .env
+.envrc
 *.log
 *.pem
 __pycache__/
 .venv/
+dashboard/node_modules/
+dashboard/.next/
