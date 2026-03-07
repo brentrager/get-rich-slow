@@ -3,11 +3,12 @@ Kalshi Sports Market Scanner
 
 Scans for sports prediction markets where:
   1. Yes price >= 88 cents (outcome nearly decided)
-  2. Game is currently in progress and near ending
-     (expected_expiration_time is within MAX_HOURS_TO_EXPIRY)
+  2. ESPN confirms the game is in its FINAL MINUTES
+     (4th quarter <=5 min, 9th inning, 2nd half final minutes, etc)
+  3. Sufficient liquidity to trade
 
-This ensures we only buy when a game is almost over and the
-outcome is effectively locked in, not pre-game favorites.
+Uses ESPN live scoreboard to verify game state, so we only buy
+when a game is truly almost over - not just pre-game favorites.
 
 Strategy: Buy Yes at 88-99c on nearly-finished games,
 collect $1 at settlement. High volume, high win rate.
@@ -24,6 +25,10 @@ load_dotenv()
 
 from kalshi_client import KalshiClient
 from db import init_db, get_session, Scan, Opportunity, Trade, BalanceSnapshot
+from espn import (
+    get_live_final_minutes_games, match_kalshi_to_espn,
+    KALSHI_TO_ESPN, GameState,
+)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -119,17 +124,29 @@ def has_liquidity(market: dict, min_volume: int = MIN_VOLUME) -> bool:
 def scan_markets(client: KalshiClient, min_yes_price: int = 88) -> list[dict]:
     opportunities = []
 
-    log.info("Discovering sports game series...")
-    game_series = find_sports_game_series(client)
-    log.info(f"Found {len(game_series)} game series")
+    # Step 1: Ask ESPN which games are in their final minutes
+    log.info("Checking ESPN for games in final minutes...")
+    espn_final = get_live_final_minutes_games()
+    if not espn_final:
+        log.info("No games in final minutes per ESPN")
+        return []
 
-    if not game_series:
-        log.info("No game series found via API, using hardcoded list...")
-        game_series = SPORTS_GAME_SERIES
+    total_games = sum(len(g) for g in espn_final.values())
+    log.info(f"ESPN: {total_games} games in final minutes across {list(espn_final.keys())}")
 
+    for game_list in espn_final.values():
+        for g in game_list:
+            log.info(
+                f"  ESPN: {g.away_team} @ {g.home_team} | "
+                f"{g.away_score}-{g.home_score} | "
+                f"P{g.period} {g.display_clock} | "
+                f"Lead: {g.score_diff}pts by {g.leading_team}"
+            )
+
+    # Step 2: Only scan Kalshi series that have ESPN-confirmed live games
     now = datetime.now(timezone.utc)
 
-    for series_ticker in game_series:
+    for series_ticker, espn_games in espn_final.items():
         try:
             cursor = None
             while True:
@@ -153,42 +170,46 @@ def scan_markets(client: KalshiClient, min_yes_price: int = 88) -> list[dict]:
                         if status not in ("active", "open"):
                             continue
 
-                        # KEY FILTERS:
-                        # 1. Game must be nearly over
-                        if not is_game_nearly_over(market):
-                            continue
-                        # 2. Must have enough liquidity
+                        # Must have liquidity
                         if not has_liquidity(market):
                             continue
 
                         yes_bid = market.get("yes_bid", 0)
                         yes_ask = market.get("yes_ask", 0)
                         ticker = market.get("ticker", "")
+
+                        if not (yes_ask and yes_ask >= min_yes_price and yes_ask <= 99):
+                            continue
+
+                        # Match this Kalshi market to an ESPN game
+                        espn_game = match_kalshi_to_espn(ticker, title, espn_games)
+                        if not espn_game:
+                            continue
+
+                        # ESPN confirms: game is in final minutes
+                        spread = 100 - yes_ask
                         exp_time = market.get("expected_expiration_time", "")
 
-                        # Calculate hours until expected expiry
-                        try:
-                            exp_dt = datetime.fromisoformat(exp_time.replace("Z", "+00:00"))
-                            hours_left = (exp_dt - now).total_seconds() / 3600
-                        except (ValueError, TypeError):
-                            hours_left = 0
-
-                        if yes_ask and yes_ask >= min_yes_price and yes_ask <= 99:
-                            spread = 100 - yes_ask
-                            opportunities.append({
-                                "ticker": ticker,
-                                "event_ticker": event_ticker,
-                                "title": title,
-                                "yes_sub_title": market.get("yes_sub_title", ""),
-                                "yes_bid": yes_bid,
-                                "yes_ask": yes_ask,
-                                "spread": spread,
-                                "volume": market.get("volume", 0),
-                                "close_time": market.get("close_time", ""),
-                                "expected_expiration": exp_time,
-                                "hours_left": round(hours_left, 2),
-                                "series_ticker": series_ticker,
-                            })
+                        opportunities.append({
+                            "ticker": ticker,
+                            "event_ticker": event_ticker,
+                            "title": title,
+                            "yes_sub_title": market.get("yes_sub_title", ""),
+                            "yes_bid": yes_bid,
+                            "yes_ask": yes_ask,
+                            "spread": spread,
+                            "volume": market.get("volume", 0),
+                            "close_time": market.get("close_time", ""),
+                            "expected_expiration": exp_time,
+                            "series_ticker": series_ticker,
+                            # ESPN enrichment
+                            "espn_period": espn_game.period,
+                            "espn_clock": espn_game.display_clock,
+                            "espn_home": espn_game.home_team,
+                            "espn_away": espn_game.away_team,
+                            "espn_score": f"{espn_game.away_score}-{espn_game.home_score}",
+                            "espn_lead": espn_game.score_diff,
+                        })
 
                 cursor = data.get("cursor", "")
                 if not cursor:
@@ -198,8 +219,8 @@ def scan_markets(client: KalshiClient, min_yes_price: int = 88) -> list[dict]:
             log.warning(f"Error scanning series {series_ticker}: {e}")
             continue
 
-    # Sort by hours_left ascending (closest to ending first), then spread
-    opportunities.sort(key=lambda x: (x["hours_left"], -x["spread"]))
+    # Sort by spread (highest profit first), then score lead (bigger blowouts first)
+    opportunities.sort(key=lambda x: (-x["spread"], -x["espn_lead"]))
     return opportunities
 
 
@@ -222,7 +243,7 @@ def place_bet(
     log.info(
         f"  Order: BUY {count}x YES @ {yes_price}c = ${total_cost/100:.2f} cost, "
         f"${total_profit_if_win/100:.2f} potential profit | "
-        f"{opp['hours_left']}h until expiry"
+        f"ESPN: P{opp.get('espn_period','')} {opp.get('espn_clock','')}"
     )
 
     session = get_session()
@@ -319,7 +340,9 @@ def run_scanner(
                 log.info(
                     f"  {opp['ticker']} | {opp['yes_sub_title']} | "
                     f"Yes Ask: {opp['yes_ask']}c | Spread: {opp['spread']}c | "
-                    f"Expires in {opp['hours_left']}h | Vol: {opp['volume']}"
+                    f"ESPN: P{opp['espn_period']} {opp['espn_clock']} "
+                    f"{opp['espn_away']}@{opp['espn_home']} {opp['espn_score']} | "
+                    f"Vol: {opp['volume']}"
                 )
 
                 db_opp = Opportunity(
