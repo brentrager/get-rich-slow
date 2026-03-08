@@ -12,9 +12,14 @@ from pydantic import BaseModel
 from sqlalchemy import desc, func
 
 from db import BalanceSnapshot, Opportunity, Scan, StretchOpportunity, Trade, get_session, init_db
-from espn import KALSHI_TO_ESPN, get_scoreboard, match_kalshi_to_espn, GameState
+from espn import KALSHI_TO_ESPN, SPORT_FINAL_PERIOD, get_scoreboard, match_kalshi_to_espn
 from kalshi_client import KalshiClient
-from scanner import MIN_SCORE_LEAD
+from scanner import (
+    MIN_SCORE_LEAD,
+    MIN_VOLUME,
+    STRETCH_PRICE_MIN,
+    STRETCH_SCORE_LEAD,
+)
 
 # --- Pydantic response models ---
 
@@ -496,3 +501,87 @@ def get_stretch_stats():
     )
 
 
+SPORT_DISPLAY_NAMES = {
+    "basketball/nba": "NBA",
+    "basketball/mens-college-basketball": "NCAAMB",
+    "hockey/nhl": "NHL",
+    "football/nfl": "NFL",
+    "football/college-football": "NCAAFB",
+    "baseball/mlb": "MLB",
+    "soccer/eng.1": "EPL",
+    "soccer/esp.1": "La Liga",
+    "soccer/usa.1": "MLS",
+    "mma/ufc": "UFC",
+}
+
+# Clock direction per sport: "down" = countdown, "up" = counts up, "none" = no clock
+SPORT_CLOCK_DIR = {
+    "basketball/nba": "down",
+    "basketball/mens-college-basketball": "down",
+    "hockey/nhl": "down",
+    "football/nfl": "down",
+    "football/college-football": "down",
+    "baseball/mlb": "none",
+    "soccer/eng.1": "up",
+    "soccer/esp.1": "up",
+    "soccer/usa.1": "up",
+    "mma/ufc": "down",
+}
+
+
+@app.get("/api/config")
+def get_config():
+    min_price = int(os.getenv("MIN_YES_PRICE", "88"))
+    max_bet = int(os.getenv("MAX_BET_AMOUNT_CENTS", "500"))
+    max_positions = 20
+    dry_run = os.getenv("DRY_RUN", "true").lower() == "true"
+
+    sports = []
+    for sport_path, kalshi_series in sorted(
+        [(v, k) for k, v in KALSHI_TO_ESPN.items()]
+    ):
+        clock_dir = SPORT_CLOCK_DIR.get(sport_path, "down")
+        # Final minutes threshold
+        if clock_dir == "up":
+            final_min_desc = "80th minute"
+            final_min_seconds = 4800
+        elif clock_dir == "none":
+            final_min_desc = "final period"
+            final_min_seconds = None
+        else:
+            final_min_desc = "5:00 remaining"
+            final_min_seconds = 300
+
+        sports.append({
+            "sport_path": sport_path,
+            "name": SPORT_DISPLAY_NAMES.get(sport_path, sport_path),
+            "kalshi_series": kalshi_series,
+            "final_period": SPORT_FINAL_PERIOD.get(sport_path, 4),
+            "min_score_lead": MIN_SCORE_LEAD.get(sport_path, 5),
+            "stretch_score_lead": STRETCH_SCORE_LEAD.get(
+                sport_path, 3
+            ),
+            "clock_direction": clock_dir,
+            "final_minutes_desc": final_min_desc,
+            "final_minutes_seconds": final_min_seconds,
+        })
+
+    return {
+        "trading": {
+            "min_yes_price": min_price,
+            "max_bet_cents": max_bet,
+            "max_positions": max_positions,
+            "min_volume": MIN_VOLUME,
+            "dry_run": dry_run,
+        },
+        "stretch": {
+            "price_min": STRETCH_PRICE_MIN,
+        },
+        "polling": {
+            "espn_interval_s": 10,
+            "kalshi_scan_interval_s": 5,
+            "kalshi_ws": True,
+            "db_backup_interval_s": 1800,
+        },
+        "sports": sports,
+    }

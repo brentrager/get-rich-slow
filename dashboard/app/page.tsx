@@ -92,6 +92,38 @@ interface LiveGame {
     kalshi_markets: KalshiMarket[];
 }
 
+interface SportConfig {
+    sport_path: string;
+    name: string;
+    kalshi_series: string;
+    final_period: number;
+    min_score_lead: number;
+    stretch_score_lead: number;
+    clock_direction: "down" | "up" | "none";
+    final_minutes_desc: string;
+    final_minutes_seconds: number | null;
+}
+
+interface AppConfig {
+    trading: {
+        min_yes_price: number;
+        max_bet_cents: number;
+        max_positions: number;
+        min_volume: number;
+        dry_run: boolean;
+    };
+    stretch: {
+        price_min: number;
+    };
+    polling: {
+        espn_interval_s: number;
+        kalshi_scan_interval_s: number;
+        kalshi_ws: boolean;
+        db_backup_interval_s: number;
+    };
+    sports: SportConfig[];
+}
+
 interface StretchStats {
     total: number;
     wins: number;
@@ -768,6 +800,7 @@ export default function Dashboard() {
     const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
     const [balanceHistory, setBalanceHistory] = useState<BalanceSnapshot[]>([]);
     const [stretchStats, setStretchStats] = useState<StretchStats | null>(null);
+    const [config, setConfig] = useState<AppConfig | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [tab, setTab] = useState<"trades" | "opportunities">("trades");
     const games = useLiveGames(authed);
@@ -781,19 +814,21 @@ export default function Dashboard() {
 
         const fetchData = async () => {
             try {
-                const [statsRes, tradesRes, oppsRes, balRes, stretchRes] =
+                const [statsRes, tradesRes, oppsRes, balRes, stretchRes, configRes] =
                     await Promise.all([
                         fetch(`${API}/api/stats`),
                         fetch(`${API}/api/trades?limit=50`),
                         fetch(`${API}/api/opportunities?limit=50`),
                         fetch(`${API}/api/balance-history?limit=200`),
                         fetch(`${API}/api/stretch-stats`),
+                        fetch(`${API}/api/config`),
                     ]);
                 setStats(await statsRes.json());
                 setTrades((await tradesRes.json()).trades);
                 setOpportunities((await oppsRes.json()).opportunities);
                 setBalanceHistory((await balRes.json()).snapshots);
                 setStretchStats(await stretchRes.json());
+                setConfig(await configRes.json());
                 setError(null);
             } catch {
                 setError("Cannot connect to API");
@@ -990,6 +1025,80 @@ export default function Dashboard() {
                                     ))}
                                 </div>
                             </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Configuration Panel */}
+                {config && (
+                    <div className="animate-fade-in bg-zinc-900/80 border border-amber-900/30 rounded-xl p-5 mb-8 backdrop-blur-sm">
+                        <h2 className="text-sm text-amber-600 font-medium mb-4">
+                            Scanner Configuration
+                        </h2>
+
+                        {/* Trading params */}
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
+                            <div className="bg-black/30 rounded-lg p-3 border border-zinc-800">
+                                <div className="text-zinc-500 text-xs">Min YES Price</div>
+                                <div className="text-amber-200 text-lg font-bold font-mono">{config.trading.min_yes_price}¢</div>
+                            </div>
+                            <div className="bg-black/30 rounded-lg p-3 border border-zinc-800">
+                                <div className="text-zinc-500 text-xs">Max Bet</div>
+                                <div className="text-amber-200 text-lg font-bold font-mono">{cents(config.trading.max_bet_cents)}</div>
+                            </div>
+                            <div className="bg-black/30 rounded-lg p-3 border border-zinc-800">
+                                <div className="text-zinc-500 text-xs">Max Positions</div>
+                                <div className="text-amber-200 text-lg font-bold font-mono">{config.trading.max_positions}</div>
+                            </div>
+                            <div className="bg-black/30 rounded-lg p-3 border border-zinc-800">
+                                <div className="text-zinc-500 text-xs">Min Volume</div>
+                                <div className="text-amber-200 text-lg font-bold font-mono">{config.trading.min_volume}</div>
+                            </div>
+                            <div className="bg-black/30 rounded-lg p-3 border border-zinc-800">
+                                <div className="text-zinc-500 text-xs">Mode</div>
+                                <div className={`text-lg font-bold ${config.trading.dry_run ? "text-yellow-400" : "text-green-400"}`}>
+                                    {config.trading.dry_run ? "DRY RUN" : "LIVE"}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Polling */}
+                        <div className="flex gap-4 mb-5 text-xs text-zinc-500">
+                            <span>ESPN: {config.polling.espn_interval_s}s</span>
+                            <span>Kalshi scan: {config.polling.kalshi_scan_interval_s}s</span>
+                            <span>Kalshi WS: {config.polling.kalshi_ws ? "✓ real-time" : "off"}</span>
+                            <span>Stretch min: {config.stretch.price_min}¢</span>
+                            <span>DB backup: {config.polling.db_backup_interval_s / 60}m</span>
+                        </div>
+
+                        {/* Per-sport table */}
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-xs">
+                                <thead>
+                                    <tr className="text-zinc-500 border-b border-zinc-800">
+                                        <th className="text-left py-2 pr-4">Sport</th>
+                                        <th className="text-left py-2 pr-4">Kalshi Series</th>
+                                        <th className="text-center py-2 pr-4">Final Period</th>
+                                        <th className="text-center py-2 pr-4">End-of-Game</th>
+                                        <th className="text-center py-2 pr-4">Min Lead</th>
+                                        <th className="text-center py-2 pr-4">Stretch Lead</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {config.sports.map((s) => (
+                                        <tr key={s.sport_path} className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
+                                            <td className="py-2 pr-4 text-amber-200 font-medium">{s.name}</td>
+                                            <td className="py-2 pr-4 text-zinc-400 font-mono">{s.kalshi_series}</td>
+                                            <td className="py-2 pr-4 text-center text-zinc-300">
+                                                {s.clock_direction === "none" ? `Inning ${s.final_period}` : `P${s.final_period}`}
+                                            </td>
+                                            <td className="py-2 pr-4 text-center text-zinc-300">{s.final_minutes_desc}</td>
+                                            <td className="py-2 pr-4 text-center text-amber-300 font-mono">{s.min_score_lead}</td>
+                                            <td className="py-2 pr-4 text-center text-zinc-500 font-mono">{s.stretch_score_lead}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 )}
