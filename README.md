@@ -37,13 +37,13 @@ The scanner watches live sports games across **NBA, NHL, MLB, NFL, MLS, Premier 
 
 ```mermaid
 graph TD
-    ESPN["🏈 ESPN API\nscores, periods, clocks (10s poll)"]
-    KWS["⚡ Kalshi WebSocket\nreal-time prices + settlements"]
-    KREST["📡 Kalshi REST API\ndiscover markets, place orders (5s)"]
-    SCANNER["🐍 Scanner\nPython / asyncio"]
-    DB["🗄️ SQLite on EFS\ntrades, balance, opportunities"]
-    API["🚀 FastAPI\n/api/*"]
-    DASH["🖥️ Next.js Dashboard\ngetrich.rager.tech"]
+    ESPN["🏈 ESPN API<br/>scores, periods, clocks · 10s poll"]
+    KWS["⚡ Kalshi WebSocket<br/>real-time prices + settlements"]
+    KREST["📡 Kalshi REST API<br/>discover markets, place orders · 5s"]
+    SCANNER["🐍 Scanner<br/>Python / asyncio"]
+    DB["🗄️ SQLite on EFS<br/>trades, balance, opportunities"]
+    API["🚀 FastAPI<br/>/api/*"]
+    DASH["🖥️ Next.js Dashboard<br/>getrich.rager.tech"]
 
     ESPN --> SCANNER
     KWS --> SCANNER
