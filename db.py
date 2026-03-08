@@ -43,6 +43,15 @@ class Opportunity(Base):
     spread = Column(Integer)
     volume = Column(Integer)
     close_time = Column(String)
+    # ESPN game state at time of opportunity
+    sport_path = Column(String, nullable=True)
+    espn_period = Column(Integer, nullable=True)
+    espn_clock = Column(String, nullable=True)
+    espn_home = Column(String, nullable=True)
+    espn_away = Column(String, nullable=True)
+    espn_home_score = Column(Integer, nullable=True)
+    espn_away_score = Column(Integer, nullable=True)
+    espn_score_diff = Column(Integer, nullable=True)
 
 
 class Trade(Base):
@@ -138,6 +147,25 @@ def _migrate_add_columns():
                     )
                 )
 
+    if "opportunities" in inspector.get_table_names():
+        cols = {c["name"] for c in inspector.get_columns("opportunities")}
+        espn_cols = {
+            "sport_path": "VARCHAR",
+            "espn_period": "INTEGER",
+            "espn_clock": "VARCHAR",
+            "espn_home": "VARCHAR",
+            "espn_away": "VARCHAR",
+            "espn_home_score": "INTEGER",
+            "espn_away_score": "INTEGER",
+            "espn_score_diff": "INTEGER",
+        }
+        with engine.begin() as conn:
+            for col_name, col_type in espn_cols.items():
+                if col_name not in cols:
+                    conn.execute(
+                        text(f"ALTER TABLE opportunities ADD COLUMN {col_name} {col_type}")
+                    )
+
 
 def get_session():
     return SessionLocal()
@@ -169,9 +197,9 @@ _CONFIG_DEFAULTS: dict[str, str] = {
     "final_seconds:hockey/nhl": "300",
     "final_seconds:football/nfl": "300",
     "final_seconds:football/college-football": "300",
-    "final_seconds:soccer/eng.1": "4800",
-    "final_seconds:soccer/esp.1": "4800",
-    "final_seconds:soccer/usa.1": "4800",
+    "final_seconds:soccer/eng.1": "4500",
+    "final_seconds:soccer/esp.1": "4500",
+    "final_seconds:soccer/usa.1": "4500",
     "final_seconds:mma/ufc": "300",
 }
 

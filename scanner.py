@@ -297,35 +297,35 @@ WHAT_IF_STRATEGIES = {
         "min_yes_price": 88,
         "lead_pct": 100,  # % of configured lead
         "countdown_secs": 300,
-        "countup_secs": 4800,
+        "countup_secs": 4500,  # 75th minute
     },
     "loose_leads": {
         "label": "Loose Leads (50%)",
         "min_yes_price": 92,
         "lead_pct": 50,
         "countdown_secs": 300,
-        "countup_secs": 4800,
+        "countup_secs": 4500,  # 75th minute
     },
     "early_entry": {
-        "label": "Early Entry (8 min)",
+        "label": "Early Entry (10 min)",
         "min_yes_price": 92,
         "lead_pct": 100,
-        "countdown_secs": 480,
-        "countup_secs": 4320,  # 72nd minute
+        "countdown_secs": 600,
+        "countup_secs": 3900,  # 65th minute
     },
     "yolo": {
         "label": "YOLO (85¢ + loose + early)",
         "min_yes_price": 85,
         "lead_pct": 50,
-        "countdown_secs": 480,
-        "countup_secs": 4320,
+        "countdown_secs": 600,
+        "countup_secs": 3900,  # 65th minute
     },
     "sniper": {
         "label": "Sniper (95¢ + 2 min)",
         "min_yes_price": 95,
         "lead_pct": 100,
         "countdown_secs": 120,
-        "countup_secs": 5280,  # 88th minute
+        "countup_secs": 5100,  # 85th minute
     },
 }
 
@@ -411,10 +411,13 @@ async def scan_kalshi_with_espn(
                                         "expected_expiration_time", ""
                                     ),
                                     "series_ticker": series_ticker,
+                                    "sport_path": espn_game.sport_path,
                                     "espn_period": espn_game.period,
                                     "espn_clock": espn_game.display_clock,
                                     "espn_home": espn_game.home_team,
                                     "espn_away": espn_game.away_team,
+                                    "espn_home_score": espn_game.home_score,
+                                    "espn_away_score": espn_game.away_score,
                                     "espn_score": f"{espn_game.away_score}-{espn_game.home_score}",
                                     "espn_lead": espn_game.score_diff,
                                 }
@@ -503,6 +506,14 @@ async def scan_kalshi_with_espn(
                 spread=opp["spread"],
                 volume=opp["volume"],
                 close_time=opp["close_time"],
+                sport_path=opp.get("sport_path"),
+                espn_period=opp.get("espn_period"),
+                espn_clock=opp.get("espn_clock"),
+                espn_home=opp.get("espn_home"),
+                espn_away=opp.get("espn_away"),
+                espn_home_score=opp.get("espn_home_score"),
+                espn_away_score=opp.get("espn_away_score"),
+                espn_score_diff=opp.get("espn_lead"),
             )
             session.add(db_opp)
 

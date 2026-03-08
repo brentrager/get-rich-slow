@@ -81,6 +81,14 @@ class OpportunityResponse(BaseModel):
     spread: int
     volume: int
     series_ticker: Optional[str] = None
+    sport_path: Optional[str] = None
+    espn_period: Optional[int] = None
+    espn_clock: Optional[str] = None
+    espn_home: Optional[str] = None
+    espn_away: Optional[str] = None
+    espn_home_score: Optional[int] = None
+    espn_away_score: Optional[int] = None
+    espn_score_diff: Optional[int] = None
 
 
 class OpportunitiesListResponse(BaseModel):
@@ -618,7 +626,7 @@ def get_config_endpoint():
         clock_dir = SPORT_CLOCK_DIR.get(sport_path, "down")
         final_secs = int(cfg.get(f"final_seconds:{sport_path}", "0"))
         if not final_secs:
-            final_secs = 4800 if clock_dir == "up" else 300
+            final_secs = 4500 if clock_dir == "up" else 300
         lead = int(cfg.get(f"lead:{sport_path}", "0"))
         if not lead and sport_path in MIN_SCORE_LEAD:
             lead = MIN_SCORE_LEAD[sport_path]

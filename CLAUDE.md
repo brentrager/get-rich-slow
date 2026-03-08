@@ -11,11 +11,12 @@ Kalshi sports prediction market scanner. Buys YES contracts at 88-99c on games t
 - **Python**: uv (not pip), ruff (not black), ty (not mypy)
 - **JS/TS**: pnpm, oxfmt (4 spaces), oxlint (not eslint)
 - **No dev server**: Use Docker for everything locally
+- **CLI first**: Use `pnpm cli` (react-ink TUI) for config changes, stats, and trades whenever possible instead of direct API calls or DB access
 
 ## Deploy
 ```bash
 # Deploy to AWS (requires `assume smooai.dev` for AWS auth)
-pnpm deploy
+pnpm sst:deploy
 
 # Or manually:
 rm -rf dashboard/.open-next dashboard/.next && AWS_PROFILE=smooai.dev npx sst deploy
@@ -75,9 +76,9 @@ curl -X PUT https://getrich-api.rager.tech/api/config \
 | `final_seconds:basketball/nba` | 300 | Clock <= 5:00 in final quarter |
 | `final_seconds:hockey/nhl` | 300 | Clock <= 5:00 in final period |
 | `final_seconds:football/nfl` | 300 | Clock <= 5:00 in 4th quarter |
-| `final_seconds:soccer/eng.1` | 4800 | Clock >= 80th minute |
-| `final_seconds:soccer/esp.1` | 4800 | Clock >= 80th minute |
-| `final_seconds:soccer/usa.1` | 4800 | Clock >= 80th minute |
+| `final_seconds:soccer/eng.1` | 4500 | Clock >= 75th minute |
+| `final_seconds:soccer/esp.1` | 4500 | Clock >= 75th minute |
+| `final_seconds:soccer/usa.1` | 4500 | Clock >= 75th minute |
 
 Note: For countdown sports (NBA, NHL, NFL, etc.) the value means "clock must be <= X seconds". For count-up sports (soccer) it means "clock must be >= X seconds".
 

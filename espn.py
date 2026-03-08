@@ -85,7 +85,7 @@ class GameState:
         final_secs = get_config_int(f"final_seconds:{self.sport_path}")
         # Soccer clock counts UP — require >= threshold
         if "soccer" in self.sport_path:
-            return self.clock_seconds >= (final_secs or 4800)
+            return self.clock_seconds >= (final_secs or 4500)
         return self.clock_seconds <= (final_secs or 300)
 
     @property
@@ -237,6 +237,9 @@ def match_kalshi_to_espn(
     """
     Try to match a Kalshi market to an ESPN game by team abbreviations.
     Kalshi tickers contain team abbreviations (e.g., KXNBAGAME-26MAR07NYKLAC-LAC).
+
+    Uses exact abbreviation matching first, then falls back to fuzzy title matching
+    for soccer leagues where team names may differ between ESPN and Kalshi.
     """
     ticker_upper = kalshi_ticker.upper()
     title_upper = kalshi_title.upper()
@@ -252,5 +255,25 @@ def match_kalshi_to_espn(
         # against future games (e.g., tomorrow's MIL game matching today's MIL game)
         if home_match and away_match:
             return game
+
+    # Fallback: fuzzy title matching for soccer (team name substrings)
+    # Kalshi titles often use full team names like "Villarreal vs Elche"
+    if espn_games and "soccer" in espn_games[0].sport_path:
+        for game in espn_games:
+            home_name = game.home_team.upper()
+            away_name = game.away_team.upper()
+            # Check if ESPN abbreviations appear in the Kalshi ticker parts
+            # Kalshi ticker format: KXLALIGAGAME-26MAR08BETGET-GET
+            # Extract the team codes from ticker by splitting on '-'
+            parts = ticker_upper.split("-")
+            if len(parts) >= 2:
+                teams_part = parts[1]  # e.g., "26MAR08BETGET"
+                # Remove date prefix (digits and month abbreviation)
+                import re
+
+                teams_only = re.sub(r"^\d+[A-Z]{3}\d+", "", teams_part)
+                if len(teams_only) >= 6:  # at least two 3-char codes
+                    if home_name in teams_only and away_name in teams_only:
+                        return game
 
     return None
