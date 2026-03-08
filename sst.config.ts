@@ -19,6 +19,8 @@ export default $config({
         const kalshiApiKey = new sst.Secret("KalshiApiKey");
         const kalshiPrivateKey = new sst.Secret("KalshiPrivateKey");
 
+        const backupBucket = new sst.aws.Bucket("DbBackups");
+
         const vpc = new sst.aws.Vpc("Vpc", { nat: "ec2" });
         const cluster = new sst.aws.Cluster("Cluster", { vpc });
 
@@ -34,6 +36,7 @@ export default $config({
             },
             cpu: "0.25 vCPU",
             memory: "0.5 GB",
+            link: [backupBucket],
             environment: {
                 DATABASE_URL: $dev
                     ? "sqlite:///predictions.db"
@@ -44,6 +47,7 @@ export default $config({
                 MAX_BET_AMOUNT_CENTS: "500",
                 POLL_INTERVAL_SECONDS: "10",
                 DRY_RUN: "false",
+                DB_BACKUP_BUCKET: backupBucket.name,
             },
             volumes: [{ efs, path: "/data" }],
             public: {

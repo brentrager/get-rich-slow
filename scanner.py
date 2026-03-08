@@ -540,6 +540,38 @@ async def check_stretch_settlements(client: KalshiClient):
     session.close()
 
 
+async def backup_db():
+    """Copy SQLite DB to S3 if bucket is configured."""
+    bucket = os.getenv("DB_BACKUP_BUCKET")
+    if not bucket:
+        return
+    db_url = os.getenv("DATABASE_URL", "")
+    db_path = db_url.replace("sqlite:///", "") if db_url.startswith("sqlite:///") else None
+    if not db_path or not os.path.exists(db_path):
+        return
+    try:
+        import shutil
+        from datetime import datetime, timezone
+
+        import boto3
+
+        # Copy to temp file first (safe while DB is in use)
+        tmp = db_path + ".backup"
+        shutil.copy2(db_path, tmp)
+
+        s3 = boto3.client("s3")
+        now = datetime.now(timezone.utc)
+        key = f"backups/{now.strftime('%Y-%m-%d/%H%M')}-predictions.db"
+        s3.upload_file(tmp, bucket, key)
+
+        # Also keep a "latest" copy for easy restore
+        s3.upload_file(tmp, bucket, "backups/latest.db")
+        os.remove(tmp)
+        log.info(f"DB backed up to s3://{bucket}/{key}")
+    except Exception as e:
+        log.warning(f"DB backup failed: {e}")
+
+
 async def run_scanner(
     min_yes_price: int = 88,
     max_bet_cents: int = 500,
@@ -754,8 +786,16 @@ async def run_scanner(
                 log.warning(f"WS loop error: {e}, restarting in 5s...")
                 await asyncio.sleep(5)
 
+    async def backup_loop():
+        """Back up DB to S3 every 30 minutes."""
+        while True:
+            await asyncio.sleep(1800)  # 30 min
+            await backup_db()
+
     # Run all loops concurrently
-    await asyncio.gather(espn_loop(), kalshi_scan_loop(), ws_loop())
+    await asyncio.gather(
+        espn_loop(), kalshi_scan_loop(), ws_loop(), backup_loop()
+    )
 
 
 if __name__ == "__main__":
