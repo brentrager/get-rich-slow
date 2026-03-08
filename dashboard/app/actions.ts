@@ -2,7 +2,7 @@
 
 import { cookies } from "next/headers";
 
-const PASSWORD = process.env.DASHBOARD_PASSWORD || "REDACTED";
+const PASSWORD = process.env.DASHBOARD_PASSWORD || "";
 const COOKIE_NAME = "predictions_auth";
 const COOKIE_VALUE = "authenticated";
 
