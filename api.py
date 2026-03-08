@@ -392,19 +392,26 @@ async def _get_live_games() -> list[dict]:
             except Exception:
                 pass
 
+    # Deduplicate sport paths (e.g. KXMLBGAME and KXMLBSTGAME both map to baseball/mlb)
+    seen_sport_paths: set[str] = set()
+    unique_sports: list[tuple[str, str]] = []  # (series, sport_path)
+    # Collect all series per sport_path for Kalshi market matching
+    series_by_sport: dict[str, list[str]] = {}
     for series, sport_path in KALSHI_TO_ESPN.items():
+        series_by_sport.setdefault(sport_path, []).append(series)
+        if sport_path not in seen_sport_paths:
+            seen_sport_paths.add(sport_path)
+            unique_sports.append((series, sport_path))
+
+    for _primary_series, sport_path in unique_sports:
         games = await get_scoreboard(sport_path)
         for g in games:
-            # Only show live games and pre-game (skip post/settled)
-            # Skip "pre" games — they're scheduled future games, not actionable
             if g.state != "in":
                 continue
 
-            # Check game status relative to our betting criteria
             min_lead = MIN_SCORE_LEAD.get(sport_path, 5)
             meets_score_lead = g.score_diff >= min_lead
             is_target = g.is_in_final_minutes and meets_score_lead
-            # "watching" = approaching criteria (has one but not both conditions)
             is_watching = (
                 not is_target
                 and g.state == "in"
@@ -414,28 +421,30 @@ async def _get_live_games() -> list[dict]:
             # Check if we have an active trade on this event
             has_bet = False
             session = get_session()
-            bet_count = (
-                session.query(Trade)
-                .filter(
-                    Trade.event_ticker.like(f"{series}%"),
-                    Trade.status.in_(("placed", "filled")),
+            for series in series_by_sport[sport_path]:
+                bet_count = (
+                    session.query(Trade)
+                    .filter(
+                        Trade.event_ticker.like(f"{series}%"),
+                        Trade.status.in_(("placed", "filled")),
+                    )
+                    .all()
                 )
-                .all()
-            )
-            # Match by team names in the event ticker
-            for t in bet_count:
-                if (
-                    g.home_team.upper() in (t.event_ticker or "").upper()
-                    or g.away_team.upper() in (t.event_ticker or "").upper()
-                ):
-                    has_bet = True
+                for t in bet_count:
+                    if (
+                        g.home_team.upper() in (t.event_ticker or "").upper()
+                        or g.away_team.upper() in (t.event_ticker or "").upper()
+                    ):
+                        has_bet = True
+                        break
+                if has_bet:
                     break
             session.close()
 
             game_data: dict = {
                 "espn_id": g.espn_id,
                 "sport": sport_path,
-                "series": series,
+                "series": _primary_series,
                 "home_team": g.home_team,
                 "away_team": g.away_team,
                 "home_score": g.home_score,
@@ -454,34 +463,38 @@ async def _get_live_games() -> list[dict]:
                 "kalshi_markets": [],
             }
 
-            # Match Kalshi markets to this ESPN game
-            for event in kalshi_markets.get(series, []):
-                title = event.get("title", "")
-                for market in event.get("markets", []):
-                    ticker = market.get("ticker", "")
-                    if market.get("status") not in ("active", "open"):
-                        continue
-                    matched = match_kalshi_to_espn(ticker, title, [g])
-                    if matched:
-                        # Determine which ESPN team this market is for
-                        kalshi_code = ticker.split("-")[-1].upper() if "-" in ticker else ""
-                        from espn import _espn_to_kalshi_codes
+            # Match Kalshi markets from ALL series for this sport
+            seen_tickers: set[str] = set()
+            for series in series_by_sport[sport_path]:
+                for event in kalshi_markets.get(series, []):
+                    title = event.get("title", "")
+                    for market in event.get("markets", []):
+                        ticker = market.get("ticker", "")
+                        if ticker in seen_tickers:
+                            continue
+                        if market.get("status") not in ("active", "open"):
+                            continue
+                        matched = match_kalshi_to_espn(ticker, title, [g])
+                        if matched:
+                            kalshi_code = ticker.split("-")[-1].upper() if "-" in ticker else ""
+                            from espn import _espn_to_kalshi_codes
 
-                        espn_team = ""
-                        for team in (g.home_team, g.away_team):
-                            if kalshi_code in [c.upper() for c in _espn_to_kalshi_codes(team)]:
-                                espn_team = team
-                                break
-                        game_data["kalshi_markets"].append(
-                            {
-                                "ticker": ticker,
-                                "team": espn_team,
-                                "yes_sub_title": market.get("yes_sub_title", ""),
-                                "yes_bid": market.get("yes_bid", 0),
-                                "yes_ask": market.get("yes_ask", 0),
-                                "volume": market.get("volume", 0),
-                            }
-                        )
+                            espn_team = ""
+                            for team in (g.home_team, g.away_team):
+                                if kalshi_code in [c.upper() for c in _espn_to_kalshi_codes(team)]:
+                                    espn_team = team
+                                    break
+                            game_data["kalshi_markets"].append(
+                                {
+                                    "ticker": ticker,
+                                    "team": espn_team,
+                                    "yes_sub_title": market.get("yes_sub_title", ""),
+                                    "yes_bid": market.get("yes_bid", 0),
+                                    "yes_ask": market.get("yes_ask", 0),
+                                    "volume": market.get("volume", 0),
+                                }
+                            )
+                            seen_tickers.add(ticker)
 
             all_games.append(game_data)
     return all_games
