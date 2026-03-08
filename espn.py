@@ -5,10 +5,10 @@ Provides real-time game clock, score, and period info to determine
 if a game is truly in its final minutes (4th quarter, 9th inning, etc).
 """
 
-import requests
 from dataclasses import dataclass
 from typing import Optional
 
+import httpx
 
 ESPN_BASE = "https://site.api.espn.com/apis/site/v2/sports"
 
@@ -23,7 +23,8 @@ KALSHI_TO_ESPN = {
     "KXUFCFIGHT": "mma/ufc",
     "KXEPLGAME": "soccer/eng.1",
     "KXLALIGAGAME": "soccer/esp.1",
-    "KXSOCCERGAME": "soccer/usa.1",
+    "KXMLSGAME": "soccer/usa.1",
+    "KXMLBSTGAME": "baseball/mlb",
 }
 
 # How many periods/quarters each sport has in regulation
@@ -44,6 +45,7 @@ SPORT_FINAL_PERIOD = {
 @dataclass
 class GameState:
     """Live state of a game from ESPN."""
+
     espn_id: str
     home_team: str
     away_team: str
@@ -94,13 +96,14 @@ class GameState:
         return "tied"
 
 
-def get_scoreboard(sport_path: str) -> list[GameState]:
+async def get_scoreboard(sport_path: str) -> list[GameState]:
     """Fetch live scoreboard for a sport from ESPN."""
     url = f"{ESPN_BASE}/{sport_path}/scoreboard"
     try:
-        resp = requests.get(url, timeout=10)
-        resp.raise_for_status()
-        data = resp.json()
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get(url)
+            resp.raise_for_status()
+            data = resp.json()
     except Exception:
         return []
 
@@ -136,32 +139,59 @@ def get_scoreboard(sport_path: str) -> list[GameState]:
         except (ValueError, IndexError):
             clock_seconds = 0.0
 
-        games.append(GameState(
-            espn_id=event.get("id", ""),
-            home_team=home.get("team", {}).get("abbreviation", ""),
-            away_team=away.get("team", {}).get("abbreviation", ""),
-            home_score=int(home.get("score", "0")),
-            away_score=int(away.get("score", "0")),
-            period=status.get("period", 0),
-            display_clock=clock_str,
-            clock_seconds=clock_seconds,
-            state=status_type.get("state", ""),
-            status_name=status_type.get("name", ""),
-            sport_path=sport_path,
-        ))
+        games.append(
+            GameState(
+                espn_id=event.get("id", ""),
+                home_team=home.get("team", {}).get("abbreviation", ""),
+                away_team=away.get("team", {}).get("abbreviation", ""),
+                home_score=int(home.get("score", "0")),
+                away_score=int(away.get("score", "0")),
+                period=status.get("period", 0),
+                display_clock=clock_str,
+                clock_seconds=clock_seconds,
+                state=status_type.get("state", ""),
+                status_name=status_type.get("name", ""),
+                sport_path=sport_path,
+            )
+        )
 
     return games
 
 
-def get_live_final_minutes_games() -> dict[str, list[GameState]]:
+async def get_live_final_minutes_games() -> dict[str, list[GameState]]:
     """Get all games across all sports that are in their final minutes."""
     result = {}
     for kalshi_series, sport_path in KALSHI_TO_ESPN.items():
-        games = get_scoreboard(sport_path)
+        games = await get_scoreboard(sport_path)
         final_min = [g for g in games if g.is_in_final_minutes]
         if final_min:
             result[kalshi_series] = final_min
     return result
+
+
+# ESPN abbreviations that differ from Kalshi ticker abbreviations.
+# Only entries where ESPN and Kalshi use DIFFERENT codes.
+# Map ESPN abbreviation → list of Kalshi equivalents to check.
+ESPN_TO_KALSHI_ABBR: dict[str, list[str]] = {
+    # NBA
+    "GS": ["GSW"],
+    "UTAH": ["UTA"],
+    "SA": ["SAS"],
+    # MLS
+    "DC": ["DCU"],
+    "LA": ["LAG", "LA"],  # ESPN "LA" = LA Galaxy; Kalshi uses "LAG"
+    # NFL
+    "JAX": ["JAC"],
+}
+
+
+def _espn_to_kalshi_codes(espn_abbr: str) -> list[str]:
+    """Return Kalshi codes that an ESPN abbreviation could map to."""
+    codes = ESPN_TO_KALSHI_ABBR.get(espn_abbr.upper(), [])
+    # Always include the original ESPN abbreviation itself
+    if espn_abbr.upper() not in [c.upper() for c in codes]:
+        codes = [espn_abbr.upper()] + codes
+    return codes
 
 
 def match_kalshi_to_espn(
@@ -177,14 +207,19 @@ def match_kalshi_to_espn(
     title_upper = kalshi_title.upper()
 
     for game in espn_games:
-        home = game.home_team.upper()
-        away = game.away_team.upper()
-        # Check if both teams appear in ticker or title
-        if (home in ticker_upper or home in title_upper) and \
-           (away in ticker_upper or away in title_upper):
-            return game
-        # Also try matching just one team (Kalshi ticker has team code at end)
-        if ticker_upper.endswith(f"-{home}") or ticker_upper.endswith(f"-{away}"):
+        home_codes = _espn_to_kalshi_codes(game.home_team)
+        away_codes = _espn_to_kalshi_codes(game.away_team)
+
+        home_match = any(
+            c in ticker_upper or c in title_upper for c in home_codes
+        )
+        away_match = any(
+            c in ticker_upper or c in title_upper for c in away_codes
+        )
+
+        # Require BOTH teams to match — single-team matches cause false positives
+        # against future games (e.g., tomorrow's MIL game matching today's MIL game)
+        if home_match and away_match:
             return game
 
     return None

@@ -1,0 +1,13 @@
+.sst
+.venv
+__pycache__
+node_modules
+dashboard/node_modules
+dashboard/.next
+dashboard/.open-next
+*.db
+*.pem
+*.log
+.env
+.envrc
+.git

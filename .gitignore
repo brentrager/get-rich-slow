@@ -2,7 +2,10 @@
 .envrc
 *.log
 *.pem
+*.db
 __pycache__/
 .venv/
-dashboard/node_modules/
+node_modules/
 dashboard/.next/
+dashboard/.open-next/
+.sst/

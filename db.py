@@ -1,19 +1,20 @@
 import os
 from datetime import datetime, timezone
+
 from dotenv import load_dotenv
+
 load_dotenv()
 
-from sqlalchemy import (
-    create_engine, Column, Integer, String, Float, Boolean, DateTime, Text
-)
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text, create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
+_default_db = os.path.join(os.path.dirname(os.path.abspath(__file__)), "predictions.db")
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://predictions:predictions@localhost:5432/predictions",
+    f"sqlite:///{_default_db}",
 )
 
-engine = create_engine(DATABASE_URL)
+engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
@@ -64,6 +65,35 @@ class Trade(Base):
     dry_run = Column(Boolean, default=True)
     order_id = Column(String, nullable=True)
     error = Column(Text, nullable=True)
+
+
+class StretchOpportunity(Base):
+    """Near-miss markets that didn't quite meet our filters.
+
+    Tracked to see if loosening risk params would be profitable.
+    """
+
+    __tablename__ = "stretch_opportunities"
+
+    id = Column(Integer, primary_key=True)
+    found_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    ticker = Column(String, index=True)
+    event_ticker = Column(String)
+    series_ticker = Column(String)
+    title = Column(Text)
+    yes_sub_title = Column(Text)
+    yes_ask = Column(Integer)
+    volume = Column(Integer)
+    sport_path = Column(String)
+    score_lead = Column(Integer)
+    min_score_lead = Column(Integer)
+    espn_period = Column(Integer)
+    espn_clock = Column(String)
+    # Why it was a stretch (which filter it missed)
+    reason = Column(String)  # "price", "score_lead", "time"
+    # Settlement tracking
+    status = Column(String, default="open")  # open, settled_win, settled_loss
+    pnl_cents = Column(Integer, nullable=True)  # hypothetical P&L
 
 
 class BalanceSnapshot(Base):

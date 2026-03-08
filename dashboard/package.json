@@ -1,26 +1,31 @@
 {
-  "name": "dashboard",
-  "version": "0.1.0",
-  "private": true,
-  "scripts": {
-    "dev": "next dev -p 3777",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
-  },
-  "dependencies": {
-    "next": "16.1.6",
-    "react": "19.2.3",
-    "react-dom": "19.2.3"
-  },
-  "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.1.6",
-    "tailwindcss": "^4",
-    "typescript": "^5"
-  }
+    "name": "dashboard",
+    "version": "0.1.0",
+    "private": true,
+    "packageManager": "pnpm@10.8.1",
+    "scripts": {
+        "dev": "next dev -p 3777",
+        "build": "next build",
+        "start": "next start",
+        "lint": "oxlint",
+        "fmt": "oxfmt --write .",
+        "fmt:check": "oxfmt --check ."
+    },
+    "dependencies": {
+        "next": "16.1.6",
+        "react": "19.2.3",
+        "react-dom": "19.2.3",
+        "react-tweet": "^3.3.0",
+        "zod": "^4.0.0-beta.20250305"
+    },
+    "devDependencies": {
+        "@tailwindcss/postcss": "^4",
+        "@types/node": "^20",
+        "@types/react": "^19",
+        "@types/react-dom": "^19",
+        "oxfmt": "^0.7",
+        "oxlint": "^0.16",
+        "tailwindcss": "^4",
+        "typescript": "^5"
+    }
 }

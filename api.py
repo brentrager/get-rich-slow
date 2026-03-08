@@ -1,17 +1,23 @@
-"""FastAPI backend serving dashboard data from Postgres."""
+"""FastAPI backend serving dashboard data and live game tracking."""
 
+import asyncio
+import logging
+import os
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import func, desc
+from pydantic import BaseModel
+from sqlalchemy import desc, func
 
-from db import init_db, get_session, Scan, Opportunity, Trade, BalanceSnapshot
-
+from db import BalanceSnapshot, Opportunity, Scan, StretchOpportunity, Trade, get_session, init_db
+from espn import KALSHI_TO_ESPN, get_scoreboard, match_kalshi_to_espn, GameState
+from kalshi_client import KalshiClient
+from scanner import MIN_SCORE_LEAD
 
 # --- Pydantic response models ---
+
 
 class StatsResponse(BaseModel):
     total_trades: int
@@ -27,6 +33,9 @@ class StatsResponse(BaseModel):
     total_opportunities: int
     balance_cents: int
     portfolio_value_cents: int
+    open_positions: int
+    open_cost_cents: int
+    open_potential_profit_cents: int
 
 
 class TradeResponse(BaseModel):
@@ -87,20 +96,73 @@ class ScansListResponse(BaseModel):
     scans: list[ScanResponse]
 
 
+class StretchStatsResponse(BaseModel):
+    total: int
+    wins: int
+    losses: int
+    open: int
+    win_rate: float
+    hypothetical_pnl_cents: int
+    by_reason: dict[str, dict]
+
+
 # --- App ---
 
 app = FastAPI(title="Predictions Dashboard API")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3777"],
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
+log = logging.getLogger(__name__)
+_kalshi_client: KalshiClient | None = None
+
+
+async def _run_scanner_loop():
+    """Run the scanner in the background as a native async task."""
+    from scanner import run_scanner
+
+    min_price = int(os.getenv("MIN_YES_PRICE", "88"))
+    max_bet = int(os.getenv("MAX_BET_AMOUNT_CENTS", "500"))
+    interval = int(os.getenv("POLL_INTERVAL_SECONDS", "30"))
+    dry = os.getenv("DRY_RUN", "true").lower() == "true"
+
+    log.info(
+        f"Starting scanner: min_price={min_price}c, "
+        f"max_bet={max_bet}c, interval={interval}s, dry_run={dry}"
+    )
+    await run_scanner(
+        min_yes_price=min_price,
+        max_bet_cents=max_bet,
+        poll_interval=interval,
+        dry_run=dry,
+    )
+
+
 @app.on_event("startup")
-def startup():
+async def startup():
+    global _kalshi_client
     init_db()
+
+    # Initialize Kalshi client if credentials are configured
+    if os.getenv("KALSHI_API_KEY"):
+        key_id = os.environ["KALSHI_API_KEY"]
+        key_pem = os.environ.get("KALSHI_PRIVATE_KEY")
+        if key_pem:
+            _kalshi_client = KalshiClient.from_key_string(key_id, key_pem)
+        else:
+            key_path = os.environ.get("KALSHI_PRIVATE_KEY_PATH", "")
+            _kalshi_client = KalshiClient.from_key_file(key_id, key_path)
+
+        asyncio.create_task(_run_scanner_loop())
+
+
+@app.get("/")
+def health():
+    return {"status": "ok"}
 
 
 @app.get("/api/stats", response_model=StatsResponse)
@@ -111,9 +173,18 @@ def get_stats():
     live_trades = session.query(Trade).filter(Trade.dry_run == False).count()
     dry_trades = session.query(Trade).filter(Trade.dry_run == True).count()
 
-    total_cost = session.query(func.sum(Trade.cost_cents)).filter(Trade.dry_run == False).scalar() or 0
-    total_potential_profit = session.query(func.sum(Trade.potential_profit_cents)).filter(Trade.dry_run == False).scalar() or 0
-    total_pnl = session.query(func.sum(Trade.pnl_cents)).filter(Trade.pnl_cents.isnot(None)).scalar() or 0
+    total_cost = (
+        session.query(func.sum(Trade.cost_cents)).filter(Trade.dry_run == False).scalar() or 0
+    )
+    total_potential_profit = (
+        session.query(func.sum(Trade.potential_profit_cents))
+        .filter(Trade.dry_run == False)
+        .scalar()
+        or 0
+    )
+    total_pnl = (
+        session.query(func.sum(Trade.pnl_cents)).filter(Trade.pnl_cents.isnot(None)).scalar() or 0
+    )
 
     wins = session.query(Trade).filter(Trade.status == "settled_win").count()
     losses = session.query(Trade).filter(Trade.status == "settled_loss").count()
@@ -121,9 +192,21 @@ def get_stats():
     win_rate = (wins / settled * 100) if settled > 0 else 0
 
     total_scans = session.query(Scan).count()
-    total_opportunities = session.query(Opportunity).count()
+    total_opportunities = session.query(func.count(func.distinct(Opportunity.ticker))).scalar() or 0
 
-    latest_balance = session.query(BalanceSnapshot).order_by(desc(BalanceSnapshot.recorded_at)).first()
+    latest_balance = (
+        session.query(BalanceSnapshot).order_by(desc(BalanceSnapshot.recorded_at)).first()
+    )
+
+    # Open positions (active bets on the line)
+    open_trades = (
+        session.query(Trade)
+        .filter(Trade.status.in_(("placed", "filled")), Trade.dry_run == False)
+        .all()
+    )
+    open_positions = len(open_trades)
+    open_cost = sum(t.cost_cents for t in open_trades)
+    open_potential = sum(t.potential_profit_cents for t in open_trades)
 
     session.close()
 
@@ -141,19 +224,16 @@ def get_stats():
         total_opportunities=total_opportunities,
         balance_cents=latest_balance.balance_cents if latest_balance else 0,
         portfolio_value_cents=latest_balance.portfolio_value_cents if latest_balance else 0,
+        open_positions=open_positions,
+        open_cost_cents=open_cost,
+        open_potential_profit_cents=open_potential,
     )
 
 
 @app.get("/api/trades", response_model=TradesListResponse)
 def get_trades(limit: int = 50, offset: int = 0):
     session = get_session()
-    trades = (
-        session.query(Trade)
-        .order_by(desc(Trade.placed_at))
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
+    trades = session.query(Trade).order_by(desc(Trade.placed_at)).offset(offset).limit(limit).all()
     result = [
         TradeResponse(
             id=t.id,
@@ -207,14 +287,30 @@ def get_opportunities(limit: int = 50, offset: int = 0):
 
 
 @app.get("/api/balance-history", response_model=BalanceHistoryResponse)
-def get_balance_history(limit: int = 200):
+def get_balance_history(limit: int = 500):
     session = get_session()
+    # Get the most recent snapshots (descending), then reverse for chronological order
     snapshots = (
         session.query(BalanceSnapshot)
-        .order_by(BalanceSnapshot.recorded_at)
+        .order_by(desc(BalanceSnapshot.recorded_at))
         .limit(limit)
         .all()
     )
+    snapshots.reverse()
+
+    # Downsample: keep first, last, and any where balance/portfolio changed
+    if len(snapshots) > 2:
+        filtered = [snapshots[0]]
+        for s in snapshots[1:-1]:
+            prev = filtered[-1]
+            if (
+                s.balance_cents != prev.balance_cents
+                or s.portfolio_value_cents != prev.portfolio_value_cents
+            ):
+                filtered.append(s)
+        filtered.append(snapshots[-1])
+        snapshots = filtered
+
     result = [
         BalanceSnapshotResponse(
             recorded_at=s.recorded_at,
@@ -230,12 +326,7 @@ def get_balance_history(limit: int = 200):
 @app.get("/api/scans", response_model=ScansListResponse)
 def get_scans(limit: int = 50):
     session = get_session()
-    scans = (
-        session.query(Scan)
-        .order_by(desc(Scan.scanned_at))
-        .limit(limit)
-        .all()
-    )
+    scans = session.query(Scan).order_by(desc(Scan.scanned_at)).limit(limit).all()
     result = [
         ScanResponse(
             id=s.id,
@@ -246,3 +337,162 @@ def get_scans(limit: int = 50):
     ]
     session.close()
     return ScansListResponse(scans=result)
+
+
+
+async def _get_live_games() -> list[dict]:
+    """Fetch all live games across all sports from ESPN, enriched with Kalshi prices."""
+    all_games = []
+
+    # Fetch Kalshi markets for all sports series in parallel
+    kalshi_markets: dict[str, list[dict]] = {}
+    if _kalshi_client:
+        for series in KALSHI_TO_ESPN:
+            try:
+                data = await _kalshi_client.get_events(
+                    status="open",
+                    series_ticker=series,
+                    with_nested_markets=True,
+                )
+                kalshi_markets[series] = data.get("events", [])
+            except Exception:
+                pass
+
+    for series, sport_path in KALSHI_TO_ESPN.items():
+        games = await get_scoreboard(sport_path)
+        for g in games:
+            # Only show live games and pre-game (skip post/settled)
+            # Skip "pre" games — they're scheduled future games, not actionable
+            if g.state != "in":
+                continue
+
+            # Check game status relative to our betting criteria
+            min_lead = MIN_SCORE_LEAD.get(sport_path, 5)
+            meets_score_lead = g.score_diff >= min_lead
+            is_target = g.is_in_final_minutes and meets_score_lead
+            # "watching" = approaching criteria (has one but not both conditions)
+            is_watching = (
+                not is_target
+                and g.state == "in"
+                and (g.is_in_final_minutes or meets_score_lead or g.is_final_period)
+            )
+
+            # Check if we have an active trade on this event
+            has_bet = False
+            session = get_session()
+            bet_count = (
+                session.query(Trade)
+                .filter(
+                    Trade.event_ticker.like(f"{series}%"),
+                    Trade.status.in_(("placed", "filled")),
+                )
+                .all()
+            )
+            # Match by team names in the event ticker
+            for t in bet_count:
+                if (
+                    g.home_team.upper() in (t.event_ticker or "").upper()
+                    or g.away_team.upper() in (t.event_ticker or "").upper()
+                ):
+                    has_bet = True
+                    break
+            session.close()
+
+            game_data: dict = {
+                "espn_id": g.espn_id,
+                "sport": sport_path,
+                "series": series,
+                "home_team": g.home_team,
+                "away_team": g.away_team,
+                "home_score": g.home_score,
+                "away_score": g.away_score,
+                "period": g.period,
+                "display_clock": g.display_clock,
+                "clock_seconds": g.clock_seconds,
+                "state": g.state,
+                "is_final_minutes": g.is_in_final_minutes,
+                "is_target": is_target,
+                "is_watching": is_watching,
+                "has_bet": has_bet,
+                "score_diff": g.score_diff,
+                "min_score_lead": min_lead,
+                "final_period": g.final_period,
+                "kalshi_markets": [],
+            }
+
+            # Match Kalshi markets to this ESPN game
+            for event in kalshi_markets.get(series, []):
+                title = event.get("title", "")
+                for market in event.get("markets", []):
+                    ticker = market.get("ticker", "")
+                    if market.get("status") not in ("active", "open"):
+                        continue
+                    matched = match_kalshi_to_espn(ticker, title, [g])
+                    if matched:
+                        # Determine which ESPN team this market is for
+                        kalshi_code = ticker.split("-")[-1].upper() if "-" in ticker else ""
+                        from espn import _espn_to_kalshi_codes
+                        espn_team = ""
+                        for team in (g.home_team, g.away_team):
+                            if kalshi_code in [c.upper() for c in _espn_to_kalshi_codes(team)]:
+                                espn_team = team
+                                break
+                        game_data["kalshi_markets"].append(
+                            {
+                                "ticker": ticker,
+                                "team": espn_team,
+                                "yes_sub_title": market.get("yes_sub_title", ""),
+                                "yes_bid": market.get("yes_bid", 0),
+                                "yes_ask": market.get("yes_ask", 0),
+                                "volume": market.get("volume", 0),
+                            }
+                        )
+
+            all_games.append(game_data)
+    return all_games
+
+
+@app.get("/api/live-games")
+async def get_live_games():
+    return {"games": await _get_live_games()}
+
+
+@app.get("/api/stretch-stats", response_model=StretchStatsResponse)
+def get_stretch_stats():
+    session = get_session()
+    all_stretches = session.query(StretchOpportunity).all()
+
+    total = len(all_stretches)
+    wins = sum(1 for s in all_stretches if s.status == "settled_win")
+    losses = sum(1 for s in all_stretches if s.status == "settled_loss")
+    open_count = sum(1 for s in all_stretches if s.status == "open")
+    settled = wins + losses
+    win_rate = (wins / settled * 100) if settled > 0 else 0
+    hyp_pnl = sum(s.pnl_cents or 0 for s in all_stretches)
+
+    # Break down by reason
+    by_reason: dict[str, dict] = {}
+    for s in all_stretches:
+        for reason in (s.reason or "unknown").split(","):
+            reason = reason.strip()
+            if reason not in by_reason:
+                by_reason[reason] = {"total": 0, "wins": 0, "losses": 0, "pnl_cents": 0}
+            by_reason[reason]["total"] += 1
+            if s.status == "settled_win":
+                by_reason[reason]["wins"] += 1
+            elif s.status == "settled_loss":
+                by_reason[reason]["losses"] += 1
+            by_reason[reason]["pnl_cents"] += s.pnl_cents or 0
+
+    session.close()
+    return StretchStatsResponse(
+        total=total,
+        wins=wins,
+        losses=losses,
+        open=open_count,
+        win_rate=round(win_rate, 1),
+        hypothetical_pnl_cents=hyp_pnl,
+        by_reason=by_reason,
+    )
+
+

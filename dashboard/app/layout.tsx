@@ -13,7 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Predictions Dashboard",
+  metadataBase: new URL("https://getrich.rager.tech"),
+  title: "Rager's Get Rich Slow Scheme",
   description: "Kalshi sports prediction market scanner",
 };
 

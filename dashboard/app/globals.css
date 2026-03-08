@@ -1,26 +1,89 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+    --background: #0a0a0a;
+    --foreground: #ededed;
+    --gold: #d4a017;
+    --gold-light: #f0d060;
+    --gold-dark: #8b6914;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+    --color-background: var(--background);
+    --color-foreground: var(--foreground);
+    --font-sans: var(--font-geist-sans);
+    --font-mono: var(--font-geist-mono);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+@keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+@keyframes gold-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+@keyframes fade-in-up {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes glow {
+    0%, 100% { box-shadow: 0 0 5px rgba(212, 160, 23, 0.3), 0 0 20px rgba(212, 160, 23, 0.1); }
+    50% { box-shadow: 0 0 10px rgba(212, 160, 23, 0.5), 0 0 40px rgba(212, 160, 23, 0.2); }
+}
+
+.gold-shimmer {
+    background: linear-gradient(
+        90deg,
+        var(--gold-dark) 0%,
+        var(--gold-light) 25%,
+        var(--gold) 50%,
+        var(--gold-light) 75%,
+        var(--gold-dark) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 3s linear infinite;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.gold-border {
+    border-image: linear-gradient(135deg, var(--gold-dark), var(--gold-light), var(--gold-dark)) 1;
+}
+
+.gold-glow {
+    animation: glow 2s ease-in-out infinite;
+}
+
+.animate-fade-in {
+    animation: fade-in-up 0.5s ease-out forwards;
+}
+
+.gold-bar {
+    background: linear-gradient(180deg, var(--gold-light), var(--gold-dark));
+}
+
+.gold-bar:hover {
+    background: linear-gradient(180deg, var(--gold-light), var(--gold));
+}
+
+/* react-tweet dark theme overrides */
+[data-theme="dark"] {
+    --tweet-bg-color: transparent;
+    --tweet-border: 1px solid rgba(139, 105, 20, 0.2);
+    --tweet-font-color: #d4d4d8;
+    --tweet-font-color-secondary: #71717a;
+    --tweet-link-color: #d4a017;
+    --tweet-link-color-hover: #f0d060;
+    --tweet-container-margin: 0;
 }

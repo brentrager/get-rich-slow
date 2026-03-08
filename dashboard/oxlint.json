@@ -1,0 +1,7 @@
+{
+    "rules": {
+        "no-unused-vars": "warn",
+        "no-console": "off"
+    },
+    "ignorePatterns": [".next", "node_modules"]
+}
