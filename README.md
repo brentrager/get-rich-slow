@@ -17,7 +17,7 @@
 <table align="center"><tr><td align="center">
   <a href="https://smoo.ai"><img src="images/smoo-logo.png" alt="Smoo AI" width="60" /></a><br>
   <sub><em>A project by <a href="https://rager.tech">Brent Rager</a> — founder of <a href="https://smoo.ai">Smoo AI</a></em></sub><br>
-  <sub>AI that integrates with everything you build. Agents, CRM, support &amp; campaigns for your team.<br><a href="https://rager.tech">Let's talk.</a></sub>
+  <sub>AI agents, dev tools, CRM, support &amp; campaigns that integrate with everything you build.<br><a href="https://smoo.ai/work-with-us">Let's talk.</a></sub>
 </td></tr></table>
 
 ---
