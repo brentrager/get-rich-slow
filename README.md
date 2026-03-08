@@ -145,7 +145,7 @@ SST provisions everything in `sst.config.ts`:
 
 ```bash
 # Deploy to AWS (requires AWS creds + Cloudflare token in .envrc)
-pnpm deploy
+pnpm sst:deploy
 
 # Local development (Docker Compose)
 pnpm dev
@@ -154,7 +154,7 @@ pnpm dev
 pnpm dev:api
 
 # Tear down all infrastructure
-pnpm deploy:remove
+pnpm sst:remove
 ```
 
 ### CLI

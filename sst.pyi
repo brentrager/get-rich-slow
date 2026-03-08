@@ -8,34 +8,27 @@ class Resource:
         service: str
         type: str
         url: str
-
     class ApiToken:
         type: str
         value: str
-
     class App:
         name: str
         stage: str
-
     class Dashboard:
         type: str
         url: str
-
     class DashboardPassword:
         type: str
         value: str
-
     class DbBackups:
         name: str
         type: str
-
     class KalshiApiKey:
         type: str
         value: str
-
     class KalshiPrivateKey:
         type: str
         value: str
-
     class Vpc:
         type: str
+

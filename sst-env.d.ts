@@ -11,6 +11,10 @@ declare module "sst" {
       "type": "sst.aws.Service"
       "url": string
     }
+    "ApiToken": {
+      "type": "sst.sst.Secret"
+      "value": string
+    }
     "Dashboard": {
       "type": "sst.aws.Nextjs"
       "url": string
@@ -18,6 +22,10 @@ declare module "sst" {
     "DashboardPassword": {
       "type": "sst.sst.Secret"
       "value": string
+    }
+    "DbBackups": {
+      "name": string
+      "type": "sst.aws.Bucket"
     }
     "KalshiApiKey": {
       "type": "sst.sst.Secret"
