@@ -38,8 +38,11 @@ def show_config():
         elif k.startswith("final_seconds:"):
             finals[k.removeprefix("final_seconds:")] = v
         elif k in (
-            "min_yes_price", "max_bet_cents", "max_positions",
-            "min_volume", "stretch_price_min",
+            "min_yes_price",
+            "max_bet_cents",
+            "max_positions",
+            "min_volume",
+            "stretch_price_min",
         ):
             trading[k] = v
         else:

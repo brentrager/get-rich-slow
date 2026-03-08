@@ -1,15 +1,4 @@
 <p align="center">
-  <a href="https://smoo.ai"><img src="images/smoo-logo.png" alt="Smoo AI" width="100" /></a>
-</p>
-
-<p align="center">
-  <em>A project by <a href="https://rager.tech">Brent Rager</a> — founder of <a href="https://smoo.ai">Smoo AI</a></em><br>
-  <sub><a href="https://smoo.ai">Smoo AI</a> — AI that integrates with everything you build. Agents, CRM, support, and campaigns that work alongside your team.<br>Connect your tools, feed it your knowledge, and let AI work across your entire stack. <a href="https://rager.tech">Let's talk.</a></sub>
-</p>
-
----
-
-<p align="center">
   <img src="https://getrich.rager.tech/opengraph-image" alt="Rager's Get Rich Slow Scheme" width="600" />
 </p>
 
@@ -24,6 +13,12 @@
   <a href="https://getrich.rager.tech"><img src="https://img.shields.io/badge/Live_Dashboard-getrich.rager.tech-F59E0B?style=for-the-badge&logoColor=white" alt="Live Dashboard" /></a>
   <a href="https://github.com/brentrager/get-rich-slow/actions"><img src="https://img.shields.io/github/actions/workflow/status/brentrager/get-rich-slow/ci.yml?style=for-the-badge&label=CI&color=22c55e" alt="CI" /></a>
 </p>
+
+<table align="center"><tr><td align="center">
+  <a href="https://smoo.ai"><img src="images/smoo-logo.png" alt="Smoo AI" width="60" /></a><br>
+  <sub><em>A project by <a href="https://rager.tech">Brent Rager</a> — founder of <a href="https://smoo.ai">Smoo AI</a></em></sub><br>
+  <sub>AI that integrates with everything you build. Agents, CRM, support &amp; campaigns for your team.<br><a href="https://rager.tech">Let's talk.</a></sub>
+</td></tr></table>
 
 ---
 
@@ -42,13 +37,13 @@ The scanner watches live sports games across **NBA, NHL, MLB, NFL, MLS, Premier 
 
 ```mermaid
 graph TD
-    ESPN["<img src='https://cdn.simpleicons.org/espn/FF0000' width='16' /> ESPN API<br/><sub>scores, periods, clocks (10s poll)</sub>"]
-    KWS["<img src='https://cdn.simpleicons.org/socketdotio/010101' width='16' /> Kalshi WebSocket<br/><sub>real-time prices + settlements</sub>"]
-    KREST["Kalshi REST API<br/><sub>discover markets, place orders (5s)</sub>"]
-    SCANNER["<img src='https://cdn.simpleicons.org/python/3776AB' width='16' /> Scanner<br/><sub>Python / asyncio</sub>"]
-    DB["<img src='https://cdn.simpleicons.org/sqlite/003B57' width='16' /> SQLite on EFS<br/><sub>trades, balance, opportunities</sub>"]
-    API["<img src='https://cdn.simpleicons.org/fastapi/009688' width='16' /> FastAPI<br/><sub>/api/*</sub>"]
-    DASH["<img src='https://cdn.simpleicons.org/next.js/000000' width='16' /> Next.js Dashboard<br/><sub>getrich.rager.tech</sub>"]
+    ESPN["🏈 ESPN API\nscores, periods, clocks (10s poll)"]
+    KWS["⚡ Kalshi WebSocket\nreal-time prices + settlements"]
+    KREST["📡 Kalshi REST API\ndiscover markets, place orders (5s)"]
+    SCANNER["🐍 Scanner\nPython / asyncio"]
+    DB["🗄️ SQLite on EFS\ntrades, balance, opportunities"]
+    API["🚀 FastAPI\n/api/*"]
+    DASH["🖥️ Next.js Dashboard\ngetrich.rager.tech"]
 
     ESPN --> SCANNER
     KWS --> SCANNER

@@ -29,8 +29,7 @@ jobs:
               with:
                   node-version: 22
                   cache: pnpm
-                  cache-dependency-path: dashboard/pnpm-lock.yaml
-            - run: cd dashboard && pnpm install --frozen-lockfile
+            - run: pnpm install --frozen-lockfile
             - name: Lint (oxlint)
               run: cd dashboard && pnpm oxlint
             - name: Format check (oxfmt)
