@@ -1,4 +1,5 @@
 {
     "indentWidth": 4,
-    "lineWidth": 100
+    "lineWidth": 100,
+    "ignore": [".open-next", ".next", "node_modules"]
 }
