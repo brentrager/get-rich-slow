@@ -579,10 +579,10 @@ def _evaluate_what_if_strategies(session, espn_final_period: dict, max_bet_cents
 
     new_count = 0
     for strategy_name, strategy in WHAT_IF_STRATEGIES.items():
-        strat_price = strategy["min_yes_price"]
-        lead_pct = strategy["lead_pct"]
-        cd_secs = strategy["countdown_secs"]
-        cu_secs = strategy["countup_secs"]
+        strat_price = int(strategy["min_yes_price"])
+        lead_pct = int(strategy["lead_pct"])
+        cd_secs = int(strategy["countdown_secs"])
+        cu_secs = int(strategy["countup_secs"])
 
         for series_ticker, espn_games in espn_final_period.items():
             for game in espn_games:
@@ -926,6 +926,8 @@ async def run_scanner(
                                 ["market_lifecycle_v2"], tickers_list
                             )
                         else:
+                            assert ticker_sub_sid is not None
+                            assert lifecycle_sub_sid is not None
                             await ws.update_subscription(ticker_sub_sid, tickers_list)
                             await ws.update_subscription(lifecycle_sub_sid, tickers_list)
                         subscribed_tickers.update(to_add)

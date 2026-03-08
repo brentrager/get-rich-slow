@@ -10,6 +10,8 @@ if [ -n "$PYTHON_FILES" ]; then
     echo "$PYTHON_FILES" | xargs uv run ruff format
     echo "$PYTHON_FILES" | xargs uv run ruff check --fix || true
     echo "$PYTHON_FILES" | xargs git add
+    echo "Type-checking Python..."
+    uv run ty check
 fi
 
 # Format staged TS/TSX files in dashboard

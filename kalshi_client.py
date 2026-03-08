@@ -10,6 +10,7 @@ import httpx
 import websockets
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
+from cryptography.hazmat.primitives.asymmetric.types import PrivateKeyTypes
 
 log = logging.getLogger(__name__)
 
@@ -29,12 +30,18 @@ class KalshiClient:
     @classmethod
     def from_key_file(cls, key_id: str, key_path: str) -> "KalshiClient":
         with open(key_path, "rb") as f:
-            private_key = serialization.load_pem_private_key(f.read(), password=None)
+            private_key: PrivateKeyTypes = serialization.load_pem_private_key(
+                f.read(), password=None
+            )
+        assert isinstance(private_key, rsa.RSAPrivateKey)
         return cls(key_id, private_key)
 
     @classmethod
     def from_key_string(cls, key_id: str, key_pem: str) -> "KalshiClient":
-        private_key = serialization.load_pem_private_key(key_pem.encode("utf-8"), password=None)
+        private_key: PrivateKeyTypes = serialization.load_pem_private_key(
+            key_pem.encode("utf-8"), password=None
+        )
+        assert isinstance(private_key, rsa.RSAPrivateKey)
         return cls(key_id, private_key)
 
     def _sign(self, text: str) -> str:
@@ -93,7 +100,7 @@ class KalshiClient:
         limit: int = 200,
         cursor: Optional[str] = None,
     ) -> Dict:
-        params = {
+        params: dict[str, str | int] = {
             "status": status,
             "with_nested_markets": str(with_nested_markets).lower(),
             "limit": limit,
@@ -112,7 +119,7 @@ class KalshiClient:
         limit: int = 200,
         cursor: Optional[str] = None,
     ) -> Dict:
-        params = {"limit": limit}
+        params: dict[str, str | int] = {"limit": limit}
         if event_ticker:
             params["event_ticker"] = event_ticker
         if series_ticker:
@@ -139,7 +146,7 @@ class KalshiClient:
         no_price: Optional[int] = None,
         time_in_force: str = "good_till_canceled",
     ) -> Dict:
-        body = {
+        body: dict[str, str | int] = {
             "ticker": ticker,
             "side": side,
             "action": action,
@@ -207,12 +214,16 @@ class KalshiWebSocket:
         }
         if market_tickers:
             cmd["params"]["market_tickers"] = market_tickers
+        assert self._ws is not None
         await self._ws.send(json.dumps(cmd))
         log.info(f"WS subscribe cmd={self._cmd_id} channels={channels} tickers={market_tickers}")
         return self._cmd_id
 
     async def update_subscription(
-        self, sid: int, market_tickers: list[str], action: str = "add_markets",
+        self,
+        sid: int,
+        market_tickers: list[str],
+        action: str = "add_markets",
     ):
         """Add or remove markets from an existing subscription."""
         self._cmd_id += 1
@@ -225,6 +236,7 @@ class KalshiWebSocket:
                 "action": action,
             },
         }
+        assert self._ws is not None
         await self._ws.send(json.dumps(cmd))
 
     async def close(self):
@@ -236,6 +248,7 @@ class KalshiWebSocket:
         """Listen for messages and dispatch to handlers. Reconnects on failure."""
         while self._running:
             try:
+                assert self._ws is not None
                 async for raw in self._ws:
                     msg = json.loads(raw)
                     msg_type = msg.get("type", "")

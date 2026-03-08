@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import Optional
 
@@ -130,15 +131,6 @@ class StretchStatsResponse(BaseModel):
 
 # --- App ---
 
-app = FastAPI(title="Predictions Dashboard API")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
 log = logging.getLogger(__name__)
 _kalshi_client: KalshiClient | None = None
 
@@ -164,12 +156,11 @@ async def _run_scanner_loop():
     )
 
 
-@app.on_event("startup")
-async def startup():
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
     global _kalshi_client
     init_db()
 
-    # Initialize Kalshi client if credentials are configured
     if os.getenv("KALSHI_API_KEY"):
         key_id = os.environ["KALSHI_API_KEY"]
         key_pem = os.environ.get("KALSHI_PRIVATE_KEY")
@@ -180,6 +171,20 @@ async def startup():
             _kalshi_client = KalshiClient.from_key_file(key_id, key_path)
 
         asyncio.create_task(_run_scanner_loop())
+    yield
+
+
+app = FastAPI(title="Predictions Dashboard API", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,  # type: ignore[arg-type]  # starlette typing issue
+    allow_origins=[
+        "https://getrich.rager.tech",
+        "http://localhost:3777",
+        "http://localhost:3000",
+    ],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/")
@@ -535,7 +540,7 @@ def get_stretch_stats():
         strat_stretches = by_strategy.get(name, [])
         stats = _compute_stretch_stats(strat_stretches)
         strategies[name] = StrategySetStats(
-            label=cfg["label"],
+            label=str(cfg["label"]),
             **stats,
         )
 
