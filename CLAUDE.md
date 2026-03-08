@@ -13,6 +13,11 @@ Kalshi sports prediction market scanner. Buys YES contracts at 88-99c on games t
 - **No dev server**: Use Docker for everything locally
 - **CLI first**: Use `pnpm cli` (react-ink TUI) for config changes, stats, and trades whenever possible instead of direct API calls or DB access
 
+## Security
+- **NEVER commit secrets**: API tokens, Kalshi keys, Cloudflare tokens, passwords, private keys must never appear in code or config files. Use `$API_TOKEN`, `$KALSHI_API_KEY` placeholders in docs.
+- **Before every commit**: Scan staged changes for secrets (API keys, tokens, passwords, private keys). If found, abort and fix.
+- **Secrets live in**: SST secrets (`npx sst secret set`) and `.envrc` (gitignored). Never in code.
+
 ## Deploy
 ```bash
 # Deploy to AWS (requires `assume smooai.dev` for AWS auth)
