@@ -157,9 +157,31 @@ pnpm dev:api
 pnpm deploy:remove
 ```
 
-### Runtime Configuration
+### CLI
 
-The scanner reads config from the database at startup. Update settings via the API:
+A react-ink TUI for managing the scanner from the terminal:
+
+```bash
+# View current config (interactive TUI)
+pnpm cli config
+
+# Update a config value
+pnpm cli config set trading.min_yes_price 90
+
+# View stats / trades
+pnpm cli stats
+pnpm cli trades
+
+# JSON output for piping / automation
+pnpm cli stats --json
+pnpm cli trades --json | jq '.trades[0]'
+```
+
+Requires `API_TOKEN` env var (or `--token` flag). Set `GETRICH_API_URL` to override the default API endpoint.
+
+### Runtime Configuration (API)
+
+The scanner reads config from the database at startup. Update settings via the CLI above or the API directly:
 
 ```bash
 # Update a config value (requires API_TOKEN)
