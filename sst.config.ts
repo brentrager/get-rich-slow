@@ -18,6 +18,7 @@ export default $config({
         const dashboardPassword = new sst.Secret("DashboardPassword");
         const kalshiApiKey = new sst.Secret("KalshiApiKey");
         const kalshiPrivateKey = new sst.Secret("KalshiPrivateKey");
+        const apiToken = new sst.Secret("ApiToken");
 
         const backupBucket = new sst.aws.Bucket("DbBackups");
 
@@ -47,6 +48,7 @@ export default $config({
                 MAX_BET_AMOUNT_CENTS: "500",
                 POLL_INTERVAL_SECONDS: "10",
                 DRY_RUN: $dev ? "true" : "false",
+                API_TOKEN: apiToken.value,
                 DB_BACKUP_BUCKET: backupBucket.name,
             },
             volumes: [{ efs, path: "/data" }],

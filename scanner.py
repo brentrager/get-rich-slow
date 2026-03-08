@@ -24,7 +24,16 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from db import BalanceSnapshot, Opportunity, Scan, StretchOpportunity, Trade, get_session, init_db
+from db import (
+    BalanceSnapshot,
+    Opportunity,
+    Scan,
+    StretchOpportunity,
+    Trade,
+    get_config_int,
+    get_session,
+    init_db,
+)
 from espn import (
     get_live_final_minutes_games,
     match_kalshi_to_espn,
@@ -323,15 +332,18 @@ async def scan_kalshi_with_espn(
                         ticker = market.get("ticker", "")
 
                         # Need at least stretch-level price
-                        if not (yes_ask and yes_ask >= STRETCH_PRICE_MIN and yes_ask <= 99):
+                        stretch_min = get_config_int("stretch_price_min") or STRETCH_PRICE_MIN
+                        if not (yes_ask and yes_ask >= stretch_min and yes_ask <= 99):
                             continue
 
                         espn_game = match_kalshi_to_espn(ticker, title, espn_games)
                         if not espn_game:
                             continue
 
-                        min_lead = MIN_SCORE_LEAD.get(espn_game.sport_path, 5)
-                        stretch_lead = STRETCH_SCORE_LEAD.get(espn_game.sport_path, 3)
+                        db_lead = get_config_int(f"lead:{espn_game.sport_path}")
+                        fallback = MIN_SCORE_LEAD.get(espn_game.sport_path, 5)
+                        min_lead = db_lead if db_lead else fallback
+                        stretch_lead = max(1, min_lead - (min_lead * 4 // 10))
                         meets_price = yes_ask >= min_yes_price
                         meets_lead = espn_game.score_diff >= min_lead
 
@@ -450,7 +462,8 @@ async def scan_kalshi_with_espn(
                 log.info(f"  SKIP: already have position on {opp['event_ticker']}")
                 continue
 
-            if open_count >= 20:
+            max_pos = get_config_int("max_positions") or 20
+            if open_count >= max_pos:
                 log.info("  SKIP: at max 20 open positions")
                 continue
 
@@ -702,7 +715,10 @@ async def run_scanner(
         while True:
             try:
                 log.info("=" * 60)
-                log.info(f"Kalshi: scanning for Yes >= {min_yes_price}c...")
+                # Re-read config each loop so changes take effect immediately
+                cur_price = get_config_int("min_yes_price") or min_yes_price
+                cur_bet = get_config_int("max_bet_cents") or max_bet_cents
+                log.info(f"Kalshi: scanning for Yes >= {cur_price}c...")
                 async with espn_lock:
                     current_espn = dict(espn_cache)
 
@@ -764,7 +780,7 @@ async def run_scanner(
 
                 # Now evaluate using real-time prices from WS
                 await scan_kalshi_with_espn(
-                    client, current_espn, min_yes_price, max_bet_cents, dry_run
+                    client, current_espn, cur_price, cur_bet, dry_run
                 )
 
                 # Settlement checks as fallback (WS lifecycle handles most)

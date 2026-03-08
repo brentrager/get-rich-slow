@@ -105,9 +105,87 @@ class BalanceSnapshot(Base):
     portfolio_value_cents = Column(Integer, nullable=True)
 
 
+class ConfigEntry(Base):
+    """Key-value config store for runtime-tunable parameters."""
+
+    __tablename__ = "config"
+
+    key = Column(String, primary_key=True)
+    value = Column(Text, nullable=False)
+
+
 def init_db():
     Base.metadata.create_all(engine)
 
 
 def get_session():
     return SessionLocal()
+
+
+# --- Runtime config helpers ---
+
+# Defaults used when no DB override exists
+_CONFIG_DEFAULTS: dict[str, str] = {
+    "min_yes_price": "92",
+    "max_bet_cents": "500",
+    "max_positions": "20",
+    "min_volume": "50",
+    "stretch_price_min": "85",
+    # Per-sport score leads: sport_path -> min lead
+    "lead:basketball/nba": "8",
+    "lead:basketball/mens-college-basketball": "8",
+    "lead:hockey/nhl": "2",
+    "lead:football/nfl": "10",
+    "lead:football/college-football": "10",
+    "lead:baseball/mlb": "3",
+    "lead:soccer/eng.1": "2",
+    "lead:soccer/esp.1": "2",
+    "lead:soccer/usa.1": "2",
+    "lead:mma/ufc": "0",
+    # Per-sport final minutes (seconds): clock <= X for countdown, clock >= X for count-up
+    "final_seconds:basketball/nba": "300",
+    "final_seconds:basketball/mens-college-basketball": "300",
+    "final_seconds:hockey/nhl": "300",
+    "final_seconds:football/nfl": "300",
+    "final_seconds:football/college-football": "300",
+    "final_seconds:soccer/eng.1": "4800",
+    "final_seconds:soccer/esp.1": "4800",
+    "final_seconds:soccer/usa.1": "4800",
+    "final_seconds:mma/ufc": "300",
+}
+
+
+def get_config(key: str) -> str:
+    """Get a config value from DB, falling back to defaults."""
+    session = get_session()
+    entry = session.query(ConfigEntry).filter_by(key=key).first()
+    session.close()
+    if entry:
+        return entry.value
+    return _CONFIG_DEFAULTS.get(key, "")
+
+
+def get_config_int(key: str) -> int:
+    return int(get_config(key) or "0")
+
+
+def set_config(key: str, value: str):
+    """Set a config value in the DB."""
+    session = get_session()
+    entry = session.query(ConfigEntry).filter_by(key=key).first()
+    if entry:
+        entry.value = value
+    else:
+        session.add(ConfigEntry(key=key, value=value))
+    session.commit()
+    session.close()
+
+
+def get_all_config() -> dict[str, str]:
+    """Get all config as a dict (defaults merged with DB overrides)."""
+    result = dict(_CONFIG_DEFAULTS)
+    session = get_session()
+    for entry in session.query(ConfigEntry).all():
+        result[entry.key] = entry.value
+    session.close()
+    return result

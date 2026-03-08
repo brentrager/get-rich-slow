@@ -6,20 +6,25 @@ import os
 from datetime import datetime
 from typing import Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import desc, func
 
-from db import BalanceSnapshot, Opportunity, Scan, StretchOpportunity, Trade, get_session, init_db
+from db import (
+    BalanceSnapshot,
+    Opportunity,
+    Scan,
+    StretchOpportunity,
+    Trade,
+    get_all_config,
+    get_session,
+    init_db,
+    set_config,
+)
 from espn import KALSHI_TO_ESPN, SPORT_FINAL_PERIOD, get_scoreboard, match_kalshi_to_espn
 from kalshi_client import KalshiClient
-from scanner import (
-    MIN_SCORE_LEAD,
-    MIN_VOLUME,
-    STRETCH_PRICE_MIN,
-    STRETCH_SCORE_LEAD,
-)
+from scanner import MIN_SCORE_LEAD
 
 # --- Pydantic response models ---
 
@@ -529,11 +534,30 @@ SPORT_CLOCK_DIR = {
 }
 
 
+def _check_token(authorization: str | None):
+    """Verify Bearer token for mutable endpoints."""
+    expected = os.getenv("API_TOKEN", "")
+    if not expected:
+        raise HTTPException(403, "API_TOKEN not configured")
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(401, "Missing Bearer token")
+    if authorization.removeprefix("Bearer ") != expected:
+        raise HTTPException(401, "Invalid token")
+
+
+def _format_final_minutes(clock_dir: str, secs: int) -> str:
+    if clock_dir == "none":
+        return "final period"
+    if clock_dir == "up":
+        return f"{secs // 60}th minute"
+    mins = secs // 60
+    remainder = secs % 60
+    return f"{mins}:{remainder:02d} remaining"
+
+
 @app.get("/api/config")
-def get_config():
-    min_price = int(os.getenv("MIN_YES_PRICE", "88"))
-    max_bet = int(os.getenv("MAX_BET_AMOUNT_CENTS", "500"))
-    max_positions = 20
+def get_config_endpoint():
+    cfg = get_all_config()
     dry_run = os.getenv("DRY_RUN", "true").lower() == "true"
 
     sports = []
@@ -541,41 +565,42 @@ def get_config():
         [(v, k) for k, v in KALSHI_TO_ESPN.items()]
     ):
         clock_dir = SPORT_CLOCK_DIR.get(sport_path, "down")
-        # Final minutes threshold
-        if clock_dir == "up":
-            final_min_desc = "80th minute"
-            final_min_seconds = 4800
-        elif clock_dir == "none":
-            final_min_desc = "final period"
-            final_min_seconds = None
-        else:
-            final_min_desc = "5:00 remaining"
-            final_min_seconds = 300
+        final_secs = int(cfg.get(f"final_seconds:{sport_path}", "0"))
+        if not final_secs:
+            final_secs = 4800 if clock_dir == "up" else 300
+        lead = int(cfg.get(f"lead:{sport_path}", "0"))
+        if not lead and sport_path in MIN_SCORE_LEAD:
+            lead = MIN_SCORE_LEAD[sport_path]
+        stretch_lead = max(1, lead - (lead * 4 // 10))
 
         sports.append({
             "sport_path": sport_path,
             "name": SPORT_DISPLAY_NAMES.get(sport_path, sport_path),
             "kalshi_series": kalshi_series,
             "final_period": SPORT_FINAL_PERIOD.get(sport_path, 4),
-            "min_score_lead": MIN_SCORE_LEAD.get(sport_path, 5),
-            "stretch_score_lead": STRETCH_SCORE_LEAD.get(
-                sport_path, 3
-            ),
+            "min_score_lead": lead,
+            "stretch_score_lead": stretch_lead,
             "clock_direction": clock_dir,
-            "final_minutes_desc": final_min_desc,
-            "final_minutes_seconds": final_min_seconds,
+            "final_minutes_desc": _format_final_minutes(
+                clock_dir, final_secs
+            ),
+            "final_minutes_seconds": (
+                None if clock_dir == "none" else final_secs
+            ),
         })
 
     return {
         "trading": {
-            "min_yes_price": min_price,
-            "max_bet_cents": max_bet,
-            "max_positions": max_positions,
-            "min_volume": MIN_VOLUME,
+            "min_yes_price": int(cfg.get("min_yes_price", "92")),
+            "max_bet_cents": int(cfg.get("max_bet_cents", "500")),
+            "max_positions": int(cfg.get("max_positions", "20")),
+            "min_volume": int(cfg.get("min_volume", "50")),
             "dry_run": dry_run,
         },
         "stretch": {
-            "price_min": STRETCH_PRICE_MIN,
+            "price_min": int(
+                cfg.get("stretch_price_min", "85")
+            ),
         },
         "polling": {
             "espn_interval_s": 10,
@@ -585,3 +610,18 @@ def get_config():
         },
         "sports": sports,
     }
+
+
+class ConfigUpdate(BaseModel):
+    key: str
+    value: str
+
+
+@app.put("/api/config")
+def update_config(
+    body: ConfigUpdate,
+    authorization: str | None = Header(None),
+):
+    _check_token(authorization)
+    set_config(body.key, body.value)
+    return {"ok": True, "key": body.key, "value": body.value}
