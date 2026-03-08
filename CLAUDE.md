@@ -39,7 +39,7 @@ uv run python config_cli.py delete KEY     # revert to default
 ### Update config via API (remote — works from anywhere)
 ```bash
 curl -X PUT https://getrich-api.rager.tech/api/config \
-  -H "Authorization: Bearer 82530c502e9901ababf0b779948a0077ce1dce6c387ae97a2f1df0d41a1fcc90" \
+  -H "Authorization: Bearer $API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"key": "min_yes_price", "value": "88"}'
 ```
