@@ -794,174 +794,195 @@ function LoginForm({ onLogin }: { onLogin: () => void }) {
 
   return (
     <div className="min-h-screen bg-black text-white p-6">
-      <div className="max-w-3xl mx-auto space-y-6 animate-fade-in">
-        <div className="text-center pt-8">
-          <h1 className="text-4xl font-black gold-shimmer tracking-tight">
-            Rager's Get Rich Slow Scheme
-          </h1>
-          <p className="text-amber-800 text-sm mt-1">
-            Kalshi Sports Market Scanner
-          </p>
-        </div>
-
-        {/* Strategy Explainer */}
-        <div className="bg-zinc-900/60 border border-amber-900/20 rounded-xl p-6">
-          <h2 className="text-lg font-bold text-amber-400 mb-3">
-            The Strategy
-          </h2>
-          <div className="space-y-2 text-sm text-zinc-400">
-            <p>
-              Buy{" "}
-              <span className="text-amber-300 font-semibold">
-                YES contracts at 92c+
-              </span>{" "}
-              on Kalshi sports markets when a team is winning by a comfortable
-              margin in the final minutes of the game.
+      <div className="max-w-7xl mx-auto">
+        <div className="flex items-center justify-between mb-8 animate-fade-in">
+          <div>
+            <h1 className="text-4xl font-black gold-shimmer tracking-tight">
+              Rager's Get Rich Slow Scheme
+            </h1>
+            <p className="text-amber-800 text-sm mt-1">
+              Kalshi Sports Market Scanner
             </p>
-            <p>
-              ESPN live data confirms the game state — we only bet when the
-              outcome is nearly certain. Each $20 bet earns $0.20–$1.60 profit
-              in minutes.
-            </p>
-            <div className="grid grid-cols-2 gap-3 mt-4">
-              <div className="bg-black/40 rounded-lg p-3 border border-amber-900/10">
-                <div className="text-amber-600 text-xs uppercase tracking-wider mb-1">
-                  Filters
-                </div>
-                <div className="text-zinc-300 text-xs leading-relaxed">
-                  YES price ≥ 92c
-                  <br />
-                  Final period only
-                  <br />
-                  ESPN-verified score lead
-                  <br />
-                  Volume ≥ 50 contracts
-                </div>
-              </div>
-              <div className="bg-black/40 rounded-lg p-3 border border-amber-900/10">
-                <div className="text-amber-600 text-xs uppercase tracking-wider mb-1">
-                  Risk Controls
-                </div>
-                <div className="text-zinc-300 text-xs leading-relaxed">
-                  Max $20 per bet
-                  <br />
-                  Max 10 concurrent positions
-                  <br />
-                  No duplicate event bets
-                  <br />
-                  Min score lead by sport
-                </div>
-              </div>
-            </div>
           </div>
         </div>
 
-        {/* Scanner Configuration */}
-        {config && (
-          <div className="bg-zinc-900/80 border border-amber-900/30 rounded-xl p-5 backdrop-blur-sm">
-            <h2 className="text-sm text-amber-600 font-medium mb-4">
-              Scanner Configuration
-            </h2>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
-              <div className="bg-black/30 rounded-lg p-3 border border-zinc-800">
-                <div className="text-zinc-500 text-xs">Min YES Price</div>
-                <div className="text-amber-200 text-lg font-bold font-mono">
-                  {config.trading.min_yes_price}¢
-                </div>
-              </div>
-              <div className="bg-black/30 rounded-lg p-3 border border-zinc-800">
-                <div className="text-zinc-500 text-xs">Max Bet</div>
-                <div className="text-amber-200 text-lg font-bold font-mono">
-                  {cents(config.trading.max_bet_cents)}
-                </div>
-              </div>
-              <div className="bg-black/30 rounded-lg p-3 border border-zinc-800">
-                <div className="text-zinc-500 text-xs">Max Positions</div>
-                <div className="text-amber-200 text-lg font-bold font-mono">
-                  {config.trading.max_positions}
-                </div>
-              </div>
-              <div className="bg-black/30 rounded-lg p-3 border border-zinc-800">
-                <div className="text-zinc-500 text-xs">Min Volume</div>
-                <div className="text-amber-200 text-lg font-bold font-mono">
-                  {config.trading.min_volume}
-                </div>
-              </div>
-              <div className="bg-black/30 rounded-lg p-3 border border-zinc-800">
-                <div className="text-zinc-500 text-xs">Mode</div>
-                <div
-                  className={`text-lg font-bold ${config.trading.dry_run ? "text-yellow-400" : "text-green-400"}`}
-                >
-                  {config.trading.dry_run ? "DRY RUN" : "LIVE"}
+        {/* Strategy + Config + Inspiration */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8 animate-fade-in">
+          <div className="lg:col-span-2 space-y-6">
+            <div className="bg-zinc-900/60 border border-amber-900/20 rounded-xl p-6">
+              <h2 className="text-lg font-bold text-amber-400 mb-3">
+                The Strategy
+              </h2>
+              <div className="space-y-2 text-sm text-zinc-400">
+                <p>
+                  Buy{" "}
+                  <span className="text-amber-300 font-semibold">
+                    YES contracts at 92c+
+                  </span>{" "}
+                  on Kalshi sports markets when a team is winning by a
+                  comfortable margin in the final minutes of the game.
+                </p>
+                <p>
+                  ESPN live data confirms the game state — we only bet when the
+                  outcome is nearly certain. Each $20 bet earns $0.20–$1.60
+                  profit in minutes.
+                </p>
+                <div className="grid grid-cols-2 gap-3 mt-4">
+                  <div className="bg-black/40 rounded-lg p-3 border border-amber-900/10">
+                    <div className="text-amber-600 text-xs uppercase tracking-wider mb-1">
+                      Filters
+                    </div>
+                    <div className="text-zinc-300 text-xs leading-relaxed">
+                      YES price ≥ 92c
+                      <br />
+                      Final period only
+                      <br />
+                      ESPN-verified score lead
+                      <br />
+                      Volume ≥ 50 contracts
+                    </div>
+                  </div>
+                  <div className="bg-black/40 rounded-lg p-3 border border-amber-900/10">
+                    <div className="text-amber-600 text-xs uppercase tracking-wider mb-1">
+                      Risk Controls
+                    </div>
+                    <div className="text-zinc-300 text-xs leading-relaxed">
+                      Max $20 per bet
+                      <br />
+                      Max 10 concurrent positions
+                      <br />
+                      No duplicate event bets
+                      <br />
+                      Min score lead by sport
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="text-zinc-500 border-b border-zinc-800">
-                    <th className="text-left py-2 pr-4">Sport</th>
-                    <th className="text-left py-2 pr-4">Kalshi Series</th>
-                    <th className="text-center py-2 pr-4">Final Period</th>
-                    <th className="text-center py-2 pr-4">End-of-Game</th>
-                    <th className="text-center py-2 pr-4">Min Lead</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {config.sports.map((s) => (
-                    <tr
-                      key={s.sport_path}
-                      className="border-b border-zinc-800/50 hover:bg-zinc-800/30"
+
+            {/* Scanner Configuration */}
+            {config && (
+              <div className="bg-zinc-900/80 border border-amber-900/30 rounded-xl p-5 backdrop-blur-sm">
+                <h2 className="text-sm text-amber-600 font-medium mb-4">
+                  Scanner Configuration
+                </h2>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
+                  <div className="bg-black/30 rounded-lg p-3 border border-zinc-800">
+                    <div className="text-zinc-500 text-xs">Min YES Price</div>
+                    <div className="text-amber-200 text-lg font-bold font-mono">
+                      {config.trading.min_yes_price}¢
+                    </div>
+                  </div>
+                  <div className="bg-black/30 rounded-lg p-3 border border-zinc-800">
+                    <div className="text-zinc-500 text-xs">Max Bet</div>
+                    <div className="text-amber-200 text-lg font-bold font-mono">
+                      {cents(config.trading.max_bet_cents)}
+                    </div>
+                  </div>
+                  <div className="bg-black/30 rounded-lg p-3 border border-zinc-800">
+                    <div className="text-zinc-500 text-xs">Max Positions</div>
+                    <div className="text-amber-200 text-lg font-bold font-mono">
+                      {config.trading.max_positions}
+                    </div>
+                  </div>
+                  <div className="bg-black/30 rounded-lg p-3 border border-zinc-800">
+                    <div className="text-zinc-500 text-xs">Min Volume</div>
+                    <div className="text-amber-200 text-lg font-bold font-mono">
+                      {config.trading.min_volume}
+                    </div>
+                  </div>
+                  <div className="bg-black/30 rounded-lg p-3 border border-zinc-800">
+                    <div className="text-zinc-500 text-xs">Mode</div>
+                    <div
+                      className={`text-lg font-bold ${config.trading.dry_run ? "text-yellow-400" : "text-green-400"}`}
                     >
-                      <td className="py-2 pr-4 text-amber-200 font-medium">
-                        {s.name}
-                      </td>
-                      <td className="py-2 pr-4 text-zinc-400 font-mono">
-                        {s.kalshi_series}
-                      </td>
-                      <td className="py-2 pr-4 text-center text-zinc-300">
-                        {s.clock_direction === "none"
-                          ? `Inning ${s.final_period}`
-                          : `P${s.final_period}`}
-                      </td>
-                      <td className="py-2 pr-4 text-center text-zinc-300">
-                        {s.final_minutes_desc}
-                      </td>
-                      <td className="py-2 pr-4 text-center text-amber-300 font-mono">
-                        {s.min_score_lead}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      {config.trading.dry_run ? "DRY RUN" : "LIVE"}
+                    </div>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-zinc-500 border-b border-zinc-800">
+                        <th className="text-left py-2 pr-4">Sport</th>
+                        <th className="text-left py-2 pr-4">Kalshi Series</th>
+                        <th className="text-center py-2 pr-4">Final Period</th>
+                        <th className="text-center py-2 pr-4">End-of-Game</th>
+                        <th className="text-center py-2 pr-4">Min Lead</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {config.sports.map((s) => (
+                        <tr
+                          key={s.sport_path}
+                          className="border-b border-zinc-800/50 hover:bg-zinc-800/30"
+                        >
+                          <td className="py-2 pr-4 text-amber-200 font-medium">
+                            {s.name}
+                          </td>
+                          <td className="py-2 pr-4 text-zinc-400 font-mono">
+                            {s.kalshi_series}
+                          </td>
+                          <td className="py-2 pr-4 text-center text-zinc-300">
+                            {s.clock_direction === "none"
+                              ? `Inning ${s.final_period}`
+                              : `P${s.final_period}`}
+                          </td>
+                          <td className="py-2 pr-4 text-center text-zinc-300">
+                            {s.final_minutes_desc}
+                          </td>
+                          <td className="py-2 pr-4 text-center text-amber-300 font-mono">
+                            {s.min_score_lead}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
-        )}
+          <div className="space-y-6">
+            <div className="bg-zinc-900/60 border border-amber-900/20 rounded-xl p-4 flex flex-col">
+              <h2 className="text-lg font-bold text-amber-400 mb-2">
+                Inspiration
+              </h2>
+              <div
+                className="flex-1 overflow-hidden [&_article]:!bg-transparent [&_article]:!border-amber-900/20 [&_.react-tweet-theme]:!bg-transparent"
+                data-theme="dark"
+              >
+                <Tweet id="2023814333088637426" />
+              </div>
+            </div>
 
-        {/* Password Form */}
-        <form
-          onSubmit={handleSubmit}
-          className="gold-glow bg-zinc-900/90 border border-amber-900/40 rounded-xl p-8 max-w-sm mx-auto backdrop-blur-sm"
-        >
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => {
-              setPassword(e.target.value);
-              setError(false);
-            }}
-            placeholder="Password"
-            className="w-full bg-zinc-800/80 border border-amber-900/30 rounded-lg px-4 py-3 text-white placeholder-zinc-500 mb-4 focus:outline-none focus:border-amber-600 transition-colors"
-            autoFocus
-          />
-          {error && <p className="text-red-400 text-sm mb-4">Wrong password</p>}
-          <button
-            type="submit"
-            className="w-full bg-gradient-to-r from-amber-700 via-amber-500 to-amber-700 text-black font-bold py-3 rounded-lg hover:from-amber-600 hover:via-amber-400 hover:to-amber-600 transition-all shadow-lg shadow-amber-900/30"
-          >
-            Enter
-          </button>
-        </form>
+            {/* Password Form */}
+            <form
+              onSubmit={handleSubmit}
+              className="gold-glow bg-zinc-900/90 border border-amber-900/40 rounded-xl p-8 backdrop-blur-sm"
+            >
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setError(false);
+                }}
+                placeholder="Password"
+                className="w-full bg-zinc-800/80 border border-amber-900/30 rounded-lg px-4 py-3 text-white placeholder-zinc-500 mb-4 focus:outline-none focus:border-amber-600 transition-colors"
+                autoFocus
+              />
+              {error && (
+                <p className="text-red-400 text-sm mb-4">Wrong password</p>
+              )}
+              <button
+                type="submit"
+                className="w-full bg-gradient-to-r from-amber-700 via-amber-500 to-amber-700 text-black font-bold py-3 rounded-lg hover:from-amber-600 hover:via-amber-400 hover:to-amber-600 transition-all shadow-lg shadow-amber-900/30"
+              >
+                Enter
+              </button>
+            </form>
+          </div>
+        </div>
       </div>
     </div>
   );
