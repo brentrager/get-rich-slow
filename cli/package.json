@@ -10,14 +10,14 @@
         "fmt:check": "oxfmt --check ."
     },
     "dependencies": {
-        "ink": "^5.2.0",
+        "ink": "^6.8.0",
         "ink-big-text": "^2.0.0",
         "meow": "^13.2.0",
-        "react": "^18.3.1"
+        "react": "^19.0.0"
     },
     "devDependencies": {
         "@types/node": "^20",
-        "@types/react": "^18",
+        "@types/react": "^19",
         "oxfmt": "^0.7",
         "oxlint": "^0.16",
         "tsx": "^4.19.0",
