@@ -77,10 +77,12 @@ class GameState:
             return False
         if not self.is_final_period:
             return False
-        # For soccer (no game clock countdown) and baseball (no clock),
-        # being in the final period is enough
-        if "soccer" in self.sport_path or "baseball" in self.sport_path:
+        # Baseball has no clock — being in the final period is enough
+        if "baseball" in self.sport_path:
             return True
+        # Soccer clock counts UP — require 80th minute or later
+        if "soccer" in self.sport_path:
+            return self.clock_seconds >= 4800  # 80 * 60
         return self.clock_seconds <= 300  # 5 minutes
 
     @property
