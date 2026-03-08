@@ -662,7 +662,7 @@ async def run_scanner(
     async def kalshi_scan_loop():
         """Fetch Kalshi events, subscribe to new tickers, evaluate."""
         nonlocal ticker_sub_sid, lifecycle_sub_sid
-        kalshi_interval = 15  # Full scan every 15s (WS gives real-time prices)
+        kalshi_interval = 5  # Discover new markets every 5s
 
         # Wait for first ESPN fetch + WS connect
         await asyncio.sleep(3)
