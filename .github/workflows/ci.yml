@@ -31,10 +31,10 @@ jobs:
                   cache: pnpm
             - run: pnpm install --frozen-lockfile
             - name: Lint (oxlint)
-              run: pnpm --filter dashboard oxlint
+              run: pnpm --filter dashboard exec oxlint
             - name: Format check (oxfmt)
-              run: pnpm --filter dashboard oxfmt --check .
-            - name: Build
-              run: pnpm --filter dashboard build
+              run: pnpm exec oxfmt --check .
+            - name: Build dashboard
+              run: pnpm --filter dashboard exec next build
               env:
                   NEXT_PUBLIC_API_URL: https://getrich-api.rager.tech
