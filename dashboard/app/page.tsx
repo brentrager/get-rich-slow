@@ -900,6 +900,20 @@ function LoginForm({ onLogin }: { onLogin: () => void }) {
                     </div>
                   </div>
                 </div>
+                <div className="flex flex-wrap gap-4 mb-5 text-xs text-zinc-500">
+                  <span>ESPN: {config.polling.espn_interval_s}s</span>
+                  <span>
+                    Kalshi scan: {config.polling.kalshi_scan_interval_s}s
+                  </span>
+                  <span>
+                    Kalshi WS:{" "}
+                    {config.polling.kalshi_ws ? "✓ real-time" : "off"}
+                  </span>
+                  <span>Stretch min: {config.stretch.price_min}¢</span>
+                  <span>
+                    DB backup: {config.polling.db_backup_interval_s / 60}m
+                  </span>
+                </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-xs">
                     <thead>
@@ -909,6 +923,7 @@ function LoginForm({ onLogin }: { onLogin: () => void }) {
                         <th className="text-center py-2 pr-4">Final Period</th>
                         <th className="text-center py-2 pr-4">End-of-Game</th>
                         <th className="text-center py-2 pr-4">Min Lead</th>
+                        <th className="text-center py-2 pr-4">Stretch Lead</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -933,6 +948,9 @@ function LoginForm({ onLogin }: { onLogin: () => void }) {
                           </td>
                           <td className="py-2 pr-4 text-center text-amber-300 font-mono">
                             {s.min_score_lead}
+                          </td>
+                          <td className="py-2 pr-4 text-center text-zinc-500 font-mono">
+                            {s.stretch_score_lead}
                           </td>
                         </tr>
                       ))}
