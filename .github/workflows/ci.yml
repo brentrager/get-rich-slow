@@ -29,7 +29,9 @@ jobs:
               with:
                   node-version: 22
                   cache: pnpm
+                  cache-dependency-path: pnpm-lock.yaml
             - run: pnpm install --frozen-lockfile
+            - run: ls dashboard/node_modules/.bin/next || echo "MISSING"
             - name: Lint (oxlint)
               run: pnpm --filter dashboard lint
             - name: Format check (oxfmt)
