@@ -46,7 +46,7 @@ export default $config({
                 MIN_YES_PRICE: "92",
                 MAX_BET_AMOUNT_CENTS: "500",
                 POLL_INTERVAL_SECONDS: "10",
-                DRY_RUN: "false",
+                DRY_RUN: $dev ? "true" : "false",
                 DB_BACKUP_BUCKET: backupBucket.name,
             },
             volumes: [{ efs, path: "/data" }],

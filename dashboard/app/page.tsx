@@ -828,7 +828,7 @@ export default function Dashboard() {
                 setOpportunities((await oppsRes.json()).opportunities);
                 setBalanceHistory((await balRes.json()).snapshots);
                 setStretchStats(await stretchRes.json());
-                setConfig(await configRes.json());
+                if (configRes.ok) setConfig(await configRes.json());
                 setError(null);
             } catch {
                 setError("Cannot connect to API");
