@@ -35,7 +35,8 @@ from db import (
     init_db,
 )
 from espn import (
-    get_live_final_minutes_games,
+    game_meets_timing,
+    get_categorized_games,
     match_kalshi_to_espn,
 )
 from kalshi_client import KalshiClient, KalshiWebSocket
@@ -49,6 +50,9 @@ logging.basicConfig(
     ],
 )
 log = logging.getLogger(__name__)
+
+# Module-level market prices dict, populated by WS/API in run_scanner
+market_prices: dict[str, dict] = {}
 
 # Only bet on games expiring within this many minutes.
 # Games typically last 2-3 hours. If expected expiry is 15 min away,
@@ -276,12 +280,53 @@ async def record_balance(client: KalshiClient):
     except Exception as e:
         log.warning(f"Failed to record balance: {e}")
 
-
     # Stretch thresholds: looser filters for shadow-tracking
+
+
 STRETCH_PRICE_MIN = 85  # vs current 92c
 STRETCH_SCORE_LEAD = {
     k: max(1, v - (v * 4 // 10))  # ~40% lower lead requirement
     for k, v in MIN_SCORE_LEAD.items()
+}
+
+# What-If strategy sets: each defines a different parameter combination
+# to shadow-track alongside real bets. Results show which tuning works best.
+WHAT_IF_STRATEGIES = {
+    "lower_price": {
+        "label": "Lower Price (88¢)",
+        "min_yes_price": 88,
+        "lead_pct": 100,  # % of configured lead
+        "countdown_secs": 300,
+        "countup_secs": 4800,
+    },
+    "loose_leads": {
+        "label": "Loose Leads (50%)",
+        "min_yes_price": 92,
+        "lead_pct": 50,
+        "countdown_secs": 300,
+        "countup_secs": 4800,
+    },
+    "early_entry": {
+        "label": "Early Entry (8 min)",
+        "min_yes_price": 92,
+        "lead_pct": 100,
+        "countdown_secs": 480,
+        "countup_secs": 4320,  # 72nd minute
+    },
+    "yolo": {
+        "label": "YOLO (85¢ + loose + early)",
+        "min_yes_price": 85,
+        "lead_pct": 50,
+        "countdown_secs": 480,
+        "countup_secs": 4320,
+    },
+    "sniper": {
+        "label": "Sniper (95¢ + 2 min)",
+        "min_yes_price": 95,
+        "lead_pct": 100,
+        "countdown_secs": 120,
+        "countup_secs": 5280,  # 88th minute
+    },
 }
 
 
@@ -291,12 +336,13 @@ async def scan_kalshi_with_espn(
     min_yes_price: int,
     max_bet_cents: int,
     dry_run: bool,
+    espn_final_period: dict | None = None,
 ):
     """Scan Kalshi markets against cached ESPN game state and place bets."""
     opportunities = []
     stretch_opps = []
 
-    if not espn_final:
+    if not espn_final and not espn_final_period:
         log.info("No ESPN games in final minutes — skipping Kalshi scan")
         return
 
@@ -385,21 +431,23 @@ async def scan_kalshi_with_espn(
                             if not meets_lead:
                                 reason.append("score_lead")
 
-                            stretch_opps.append({
-                                "ticker": ticker,
-                                "event_ticker": event_ticker,
-                                "title": title,
-                                "yes_sub_title": market.get("yes_sub_title", ""),
-                                "yes_ask": yes_ask,
-                                "volume": market.get("volume", 0),
-                                "series_ticker": series_ticker,
-                                "sport_path": espn_game.sport_path,
-                                "score_lead": espn_game.score_diff,
-                                "min_score_lead": min_lead,
-                                "espn_period": espn_game.period,
-                                "espn_clock": espn_game.display_clock,
-                                "reason": ",".join(reason),
-                            })
+                            stretch_opps.append(
+                                {
+                                    "ticker": ticker,
+                                    "event_ticker": event_ticker,
+                                    "title": title,
+                                    "yes_sub_title": market.get("yes_sub_title", ""),
+                                    "yes_ask": yes_ask,
+                                    "volume": market.get("volume", 0),
+                                    "series_ticker": series_ticker,
+                                    "sport_path": espn_game.sport_path,
+                                    "score_lead": espn_game.score_diff,
+                                    "min_score_lead": min_lead,
+                                    "espn_period": espn_game.period,
+                                    "espn_clock": espn_game.display_clock,
+                                    "reason": ",".join(reason),
+                                }
+                            )
 
                 cursor = data.get("cursor", "")
                 if not cursor:
@@ -467,58 +515,167 @@ async def scan_kalshi_with_espn(
                 log.info("  SKIP: at max 20 open positions")
                 continue
 
-            result = await place_bet(
-                client, opp, max_cost_cents=max_bet_cents, dry_run=dry_run
-            )
+            result = await place_bet(client, opp, max_cost_cents=max_bet_cents, dry_run=dry_run)
             if result:
                 open_event_tickers.add(opp["event_ticker"])
                 open_count += 1
 
     session.commit()
 
-    # Record stretch opportunities (dedupe by ticker — only record first sighting)
+    # Record stretch opportunities (dedupe by ticker+strategy — only record first sighting)
     if stretch_opps:
         existing_stretch = {
-            t[0]
-            for t in session.query(StretchOpportunity.ticker)
+            (t[0], t[1])
+            for t in session.query(StretchOpportunity.ticker, StretchOpportunity.strategy_set)
             .filter(StretchOpportunity.status == "open")
             .all()
         }
         new_stretches = 0
         for s in stretch_opps:
-            if s["ticker"] in existing_stretch:
+            strategy = s.get("strategy_set", "default")
+            if (s["ticker"], strategy) in existing_stretch:
                 continue
-            session.add(StretchOpportunity(
-                ticker=s["ticker"],
-                event_ticker=s["event_ticker"],
-                series_ticker=s["series_ticker"],
-                title=s["title"],
-                yes_sub_title=s["yes_sub_title"],
-                yes_ask=s["yes_ask"],
-                volume=s["volume"],
-                sport_path=s["sport_path"],
-                score_lead=s["score_lead"],
-                min_score_lead=s["min_score_lead"],
-                espn_period=s["espn_period"],
-                espn_clock=s["espn_clock"],
-                reason=s["reason"],
-            ))
-            existing_stretch.add(s["ticker"])
+            session.add(
+                StretchOpportunity(
+                    ticker=s["ticker"],
+                    event_ticker=s["event_ticker"],
+                    series_ticker=s["series_ticker"],
+                    title=s["title"],
+                    yes_sub_title=s["yes_sub_title"],
+                    yes_ask=s["yes_ask"],
+                    volume=s["volume"],
+                    sport_path=s["sport_path"],
+                    score_lead=s["score_lead"],
+                    min_score_lead=s["min_score_lead"],
+                    espn_period=s["espn_period"],
+                    espn_clock=s["espn_clock"],
+                    reason=s["reason"],
+                    strategy_set=strategy,
+                )
+            )
+            existing_stretch.add((s["ticker"], strategy))
             new_stretches += 1
         if new_stretches:
             log.info(f"Recorded {new_stretches} new stretch opportunities")
         session.commit()
 
+    # --- What-If strategy evaluation ---
+    # Evaluate all final-period games against each what-if strategy
+    if espn_final_period:
+        _evaluate_what_if_strategies(session, espn_final_period, max_bet_cents)
+
     session.close()
+
+
+def _evaluate_what_if_strategies(session, espn_final_period: dict, max_bet_cents: int):
+    """Shadow-evaluate markets against each what-if strategy set."""
+    # Pre-load existing open what-if tickers to dedupe
+    existing = {
+        (t[0], t[1])
+        for t in session.query(StretchOpportunity.ticker, StretchOpportunity.strategy_set)
+        .filter(StretchOpportunity.status == "open")
+        .all()
+    }
+
+    new_count = 0
+    for strategy_name, strategy in WHAT_IF_STRATEGIES.items():
+        strat_price = strategy["min_yes_price"]
+        lead_pct = strategy["lead_pct"]
+        cd_secs = strategy["countdown_secs"]
+        cu_secs = strategy["countup_secs"]
+
+        for series_ticker, espn_games in espn_final_period.items():
+            for game in espn_games:
+                # Check if game meets this strategy's timing
+                if not game_meets_timing(game, cd_secs, cu_secs):
+                    continue
+
+                # Get the configured lead for this sport
+                db_lead = get_config_int(f"lead:{game.sport_path}")
+                base_lead = db_lead if db_lead else MIN_SCORE_LEAD.get(game.sport_path, 5)
+                strat_lead = max(1, base_lead * lead_pct // 100)
+
+                if game.score_diff < strat_lead:
+                    continue
+
+                # This game meets the strategy's filters — check market prices
+                # We use market_prices dict if available (populated by WS/API)
+                from espn import _espn_to_kalshi_codes
+
+                home_codes = _espn_to_kalshi_codes(game.home_team)
+                away_codes = _espn_to_kalshi_codes(game.away_team)
+
+                # Check all known market tickers for this game
+                for ticker, prices in list(market_prices.items()):
+                    prefix = series_ticker.replace("GAME", "").replace("FIGHT", "")
+                    if not ticker.startswith(prefix):
+                        # Quick filter: ticker should relate to this series
+                        # Use a broader match — check if team codes appear in ticker
+                        ticker_upper = ticker.upper()
+                        home_match = any(c in ticker_upper for c in home_codes)
+                        away_match = any(c in ticker_upper for c in away_codes)
+                        if not (home_match and away_match):
+                            continue
+
+                    yes_ask = prices.get("yes_ask", 0)
+                    volume = prices.get("volume", 0)
+
+                    if not (yes_ask and strat_price <= yes_ask <= 99 and volume >= 50):
+                        continue
+
+                    # This market would qualify under this strategy
+                    # Skip if it already qualifies under real filters (don't double-count)
+                    cur_price = get_config_int("min_yes_price") or 92
+                    cur_lead = db_lead if db_lead else base_lead
+                    real_timing = game.is_in_final_minutes
+                    real_price = yes_ask >= cur_price
+                    real_lead = game.score_diff >= cur_lead
+                    if real_timing and real_price and real_lead:
+                        continue  # already a real opportunity
+
+                    if (ticker, strategy_name) in existing:
+                        continue
+
+                    # Determine what filters this strategy relaxes
+                    reasons = []
+                    if not real_price:
+                        reasons.append("price")
+                    if not real_lead:
+                        reasons.append("score_lead")
+                    if not real_timing:
+                        reasons.append("timing")
+
+                    session.add(
+                        StretchOpportunity(
+                            ticker=ticker,
+                            event_ticker=series_ticker,
+                            series_ticker=series_ticker,
+                            title=f"{game.away_team} @ {game.home_team}",
+                            yes_sub_title="",
+                            yes_ask=yes_ask,
+                            volume=volume,
+                            sport_path=game.sport_path,
+                            score_lead=game.score_diff,
+                            min_score_lead=strat_lead,
+                            espn_period=game.period,
+                            espn_clock=game.display_clock,
+                            reason=",".join(reasons) if reasons else "strategy",
+                            strategy_set=strategy_name,
+                        )
+                    )
+                    existing.add((ticker, strategy_name))
+                    new_count += 1
+
+    if new_count:
+        log.info(f"Recorded {new_count} new what-if opportunities across strategies")
+        session.commit()
 
 
 async def check_stretch_settlements(client: KalshiClient):
     """Check stretch opportunities for settlement — would we have won?"""
     session = get_session()
     open_stretches = (
-        session.query(StretchOpportunity)
-        .filter(StretchOpportunity.status == "open")
-        .all()
+        session.query(StretchOpportunity).filter(StretchOpportunity.status == "open").all()
     )
     for stretch in open_stretches:
         try:
@@ -599,10 +756,12 @@ async def run_scanner(
 
     # Shared state protected by locks
     espn_cache: dict = {}
+    espn_final_period_cache: dict = {}
     espn_lock = asyncio.Lock()
 
-    # Track live market prices from WebSocket ticker updates
-    market_prices: dict[str, dict] = {}  # ticker -> {yes_bid, yes_ask, volume}
+    # Track live market prices from WebSocket ticker updates (module-level for what-if access)
+    global market_prices
+    market_prices = {}  # ticker -> {yes_bid, yes_ask, volume}
 
     # Track which market tickers we're subscribed to
     subscribed_tickers: set[str] = set()
@@ -680,13 +839,14 @@ async def run_scanner(
 
     async def espn_loop():
         """Refresh ESPN final-minutes games every 10s."""
-        nonlocal espn_cache
+        nonlocal espn_cache, espn_final_period_cache
         while True:
             try:
                 log.info("ESPN: refreshing live game state...")
-                fresh = await get_live_final_minutes_games()
+                fresh, fresh_fp = await get_categorized_games()
                 async with espn_lock:
                     espn_cache = fresh
+                    espn_final_period_cache = fresh_fp
                 total = sum(len(g) for g in fresh.values())
                 if total:
                     log.info(f"ESPN: {total} games in final minutes across {list(fresh.keys())}")
@@ -721,10 +881,13 @@ async def run_scanner(
                 log.info(f"Kalshi: scanning for Yes >= {cur_price}c...")
                 async with espn_lock:
                     current_espn = dict(espn_cache)
+                    current_espn_fp = dict(espn_final_period_cache)
 
                 # Discover all active market tickers from Kalshi API
+                # Include both final-minutes and final-period series for what-if tracking
+                all_series = set(current_espn.keys()) | set(current_espn_fp.keys())
                 new_tickers: set[str] = set()
-                for series_ticker in current_espn:
+                for series_ticker in all_series:
                     try:
                         cursor = None
                         while True:
@@ -758,19 +921,13 @@ async def run_scanner(
                     tickers_list = list(to_add)
                     try:
                         if ticker_sub_sid is None:
-                            ticker_sub_sid = await ws.subscribe(
-                                ["ticker"], tickers_list
-                            )
+                            ticker_sub_sid = await ws.subscribe(["ticker"], tickers_list)
                             lifecycle_sub_sid = await ws.subscribe(
                                 ["market_lifecycle_v2"], tickers_list
                             )
                         else:
-                            await ws.update_subscription(
-                                ticker_sub_sid, tickers_list
-                            )
-                            await ws.update_subscription(
-                                lifecycle_sub_sid, tickers_list
-                            )
+                            await ws.update_subscription(ticker_sub_sid, tickers_list)
+                            await ws.update_subscription(lifecycle_sub_sid, tickers_list)
                         subscribed_tickers.update(to_add)
                         n = len(to_add)
                         total = len(subscribed_tickers)
@@ -780,7 +937,12 @@ async def run_scanner(
 
                 # Now evaluate using real-time prices from WS
                 await scan_kalshi_with_espn(
-                    client, current_espn, cur_price, cur_bet, dry_run
+                    client,
+                    current_espn,
+                    cur_price,
+                    cur_bet,
+                    dry_run,
+                    espn_final_period=current_espn_fp,
                 )
 
                 # Settlement checks as fallback (WS lifecycle handles most)
@@ -809,9 +971,7 @@ async def run_scanner(
             await backup_db()
 
     # Run all loops concurrently
-    await asyncio.gather(
-        espn_loop(), kalshi_scan_loop(), ws_loop(), backup_loop()
-    )
+    await asyncio.gather(espn_loop(), kalshi_scan_loop(), ws_loop(), backup_loop())
 
 
 if __name__ == "__main__":

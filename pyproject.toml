@@ -22,7 +22,7 @@ indent-width = 4
 select = ["E", "F", "W", "I"]
 ignore = ["E402", "E712"]
 
-[tool.ty]
+[tool.ty.environment]
 python-version = "3.13"
 
 [dependency-groups]

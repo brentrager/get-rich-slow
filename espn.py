@@ -81,6 +81,7 @@ class GameState:
         if "baseball" in self.sport_path:
             return True
         from db import get_config_int
+
         final_secs = get_config_int(f"final_seconds:{self.sport_path}")
         # Soccer clock counts UP — require >= threshold
         if "soccer" in self.sport_path:
@@ -173,6 +174,36 @@ async def get_live_final_minutes_games() -> dict[str, list[GameState]]:
     return result
 
 
+async def get_categorized_games() -> tuple[dict[str, list[GameState]], dict[str, list[GameState]]]:
+    """Fetch live games once, return (final_minutes, final_period) dicts.
+
+    final_minutes: games matching the configured end-of-game timing.
+    final_period: all live games in their final period (broader net for what-ifs).
+    """
+    final_minutes: dict[str, list[GameState]] = {}
+    final_period: dict[str, list[GameState]] = {}
+    for kalshi_series, sport_path in KALSHI_TO_ESPN.items():
+        games = await get_scoreboard(sport_path)
+        fm = [g for g in games if g.is_in_final_minutes]
+        fp = [g for g in games if g.is_live and g.is_final_period]
+        if fm:
+            final_minutes[kalshi_series] = fm
+        if fp:
+            final_period[kalshi_series] = fp
+    return final_minutes, final_period
+
+
+def game_meets_timing(game: GameState, countdown_secs: int, countup_secs: int) -> bool:
+    """Check if a game meets a specific timing threshold."""
+    if not game.is_live or not game.is_final_period:
+        return False
+    if "baseball" in game.sport_path:
+        return True
+    if "soccer" in game.sport_path:
+        return game.clock_seconds >= countup_secs
+    return game.clock_seconds <= countdown_secs
+
+
 # ESPN abbreviations that differ from Kalshi ticker abbreviations.
 # Only entries where ESPN and Kalshi use DIFFERENT codes.
 # Map ESPN abbreviation → list of Kalshi equivalents to check.
@@ -214,12 +245,8 @@ def match_kalshi_to_espn(
         home_codes = _espn_to_kalshi_codes(game.home_team)
         away_codes = _espn_to_kalshi_codes(game.away_team)
 
-        home_match = any(
-            c in ticker_upper or c in title_upper for c in home_codes
-        )
-        away_match = any(
-            c in ticker_upper or c in title_upper for c in away_codes
-        )
+        home_match = any(c in ticker_upper or c in title_upper for c in home_codes)
+        away_match = any(c in ticker_upper or c in title_upper for c in away_codes)
 
         # Require BOTH teams to match — single-team matches cause false positives
         # against future games (e.g., tomorrow's MIL game matching today's MIL game)

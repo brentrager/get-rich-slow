@@ -106,6 +106,17 @@ class ScansListResponse(BaseModel):
     scans: list[ScanResponse]
 
 
+class StrategySetStats(BaseModel):
+    label: str
+    total: int
+    wins: int
+    losses: int
+    open: int
+    win_rate: float
+    hypothetical_pnl_cents: int
+    by_reason: dict[str, dict]
+
+
 class StretchStatsResponse(BaseModel):
     total: int
     wins: int
@@ -114,6 +125,7 @@ class StretchStatsResponse(BaseModel):
     win_rate: float
     hypothetical_pnl_cents: int
     by_reason: dict[str, dict]
+    strategies: dict[str, StrategySetStats]
 
 
 # --- App ---
@@ -349,7 +361,6 @@ def get_scans(limit: int = 50):
     return ScansListResponse(scans=result)
 
 
-
 async def _get_live_games() -> list[dict]:
     """Fetch all live games across all sports from ESPN, enriched with Kalshi prices."""
     all_games = []
@@ -442,6 +453,7 @@ async def _get_live_games() -> list[dict]:
                         # Determine which ESPN team this market is for
                         kalshi_code = ticker.split("-")[-1].upper() if "-" in ticker else ""
                         from espn import _espn_to_kalshi_codes
+
                         espn_team = ""
                         for team in (g.home_team, g.away_team):
                             if kalshi_code in [c.upper() for c in _espn_to_kalshi_codes(team)]:
@@ -467,22 +479,18 @@ async def get_live_games():
     return {"games": await _get_live_games()}
 
 
-@app.get("/api/stretch-stats", response_model=StretchStatsResponse)
-def get_stretch_stats():
-    session = get_session()
-    all_stretches = session.query(StretchOpportunity).all()
-
-    total = len(all_stretches)
-    wins = sum(1 for s in all_stretches if s.status == "settled_win")
-    losses = sum(1 for s in all_stretches if s.status == "settled_loss")
-    open_count = sum(1 for s in all_stretches if s.status == "open")
+def _compute_stretch_stats(stretches: list) -> dict:
+    """Compute stats for a list of stretch opportunities."""
+    total = len(stretches)
+    wins = sum(1 for s in stretches if s.status == "settled_win")
+    losses = sum(1 for s in stretches if s.status == "settled_loss")
+    open_count = sum(1 for s in stretches if s.status == "open")
     settled = wins + losses
     win_rate = (wins / settled * 100) if settled > 0 else 0
-    hyp_pnl = sum(s.pnl_cents or 0 for s in all_stretches)
+    hyp_pnl = sum(s.pnl_cents or 0 for s in stretches)
 
-    # Break down by reason
     by_reason: dict[str, dict] = {}
-    for s in all_stretches:
+    for s in stretches:
         for reason in (s.reason or "unknown").split(","):
             reason = reason.strip()
             if reason not in by_reason:
@@ -494,15 +502,55 @@ def get_stretch_stats():
                 by_reason[reason]["losses"] += 1
             by_reason[reason]["pnl_cents"] += s.pnl_cents or 0
 
+    return {
+        "total": total,
+        "wins": wins,
+        "losses": losses,
+        "open": open_count,
+        "win_rate": round(win_rate, 1),
+        "hypothetical_pnl_cents": hyp_pnl,
+        "by_reason": by_reason,
+    }
+
+
+@app.get("/api/stretch-stats", response_model=StretchStatsResponse)
+def get_stretch_stats():
+    from scanner import WHAT_IF_STRATEGIES
+
+    session = get_session()
+    all_stretches = session.query(StretchOpportunity).all()
+
+    # Overall stats (all strategy sets combined)
+    overall = _compute_stretch_stats(all_stretches)
+
+    # Per-strategy stats
+    by_strategy: dict[str, list] = {}
+    for s in all_stretches:
+        strat = s.strategy_set or "default"
+        by_strategy.setdefault(strat, []).append(s)
+
+    strategies = {}
+    # Always include all defined strategies even if empty
+    for name, cfg in WHAT_IF_STRATEGIES.items():
+        strat_stretches = by_strategy.get(name, [])
+        stats = _compute_stretch_stats(strat_stretches)
+        strategies[name] = StrategySetStats(
+            label=cfg["label"],
+            **stats,
+        )
+
+    # Include "default" (the original stretch set) if it has data
+    if "default" in by_strategy:
+        stats = _compute_stretch_stats(by_strategy["default"])
+        strategies["default"] = StrategySetStats(
+            label="Default (near-miss)",
+            **stats,
+        )
+
     session.close()
     return StretchStatsResponse(
-        total=total,
-        wins=wins,
-        losses=losses,
-        open=open_count,
-        win_rate=round(win_rate, 1),
-        hypothetical_pnl_cents=hyp_pnl,
-        by_reason=by_reason,
+        **overall,
+        strategies=strategies,
     )
 
 
@@ -561,9 +609,7 @@ def get_config_endpoint():
     dry_run = os.getenv("DRY_RUN", "true").lower() == "true"
 
     sports = []
-    for sport_path, kalshi_series in sorted(
-        [(v, k) for k, v in KALSHI_TO_ESPN.items()]
-    ):
+    for sport_path, kalshi_series in sorted([(v, k) for k, v in KALSHI_TO_ESPN.items()]):
         clock_dir = SPORT_CLOCK_DIR.get(sport_path, "down")
         final_secs = int(cfg.get(f"final_seconds:{sport_path}", "0"))
         if not final_secs:
@@ -573,21 +619,19 @@ def get_config_endpoint():
             lead = MIN_SCORE_LEAD[sport_path]
         stretch_lead = max(1, lead - (lead * 4 // 10))
 
-        sports.append({
-            "sport_path": sport_path,
-            "name": SPORT_DISPLAY_NAMES.get(sport_path, sport_path),
-            "kalshi_series": kalshi_series,
-            "final_period": SPORT_FINAL_PERIOD.get(sport_path, 4),
-            "min_score_lead": lead,
-            "stretch_score_lead": stretch_lead,
-            "clock_direction": clock_dir,
-            "final_minutes_desc": _format_final_minutes(
-                clock_dir, final_secs
-            ),
-            "final_minutes_seconds": (
-                None if clock_dir == "none" else final_secs
-            ),
-        })
+        sports.append(
+            {
+                "sport_path": sport_path,
+                "name": SPORT_DISPLAY_NAMES.get(sport_path, sport_path),
+                "kalshi_series": kalshi_series,
+                "final_period": SPORT_FINAL_PERIOD.get(sport_path, 4),
+                "min_score_lead": lead,
+                "stretch_score_lead": stretch_lead,
+                "clock_direction": clock_dir,
+                "final_minutes_desc": _format_final_minutes(clock_dir, final_secs),
+                "final_minutes_seconds": (None if clock_dir == "none" else final_secs),
+            }
+        )
 
     return {
         "trading": {
@@ -598,9 +642,7 @@ def get_config_endpoint():
             "dry_run": dry_run,
         },
         "stretch": {
-            "price_min": int(
-                cfg.get("stretch_price_min", "85")
-            ),
+            "price_min": int(cfg.get("stretch_price_min", "85")),
         },
         "polling": {
             "espn_interval_s": 10,

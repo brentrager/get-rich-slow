@@ -91,6 +91,8 @@ class StretchOpportunity(Base):
     espn_clock = Column(String)
     # Why it was a stretch (which filter it missed)
     reason = Column(String)  # "price", "score_lead", "time"
+    # Which what-if strategy set this belongs to
+    strategy_set = Column(String, default="default", index=True)
     # Settlement tracking
     status = Column(String, default="open")  # open, settled_win, settled_loss
     pnl_cents = Column(Integer, nullable=True)  # hypothetical P&L
@@ -116,6 +118,25 @@ class ConfigEntry(Base):
 
 def init_db():
     Base.metadata.create_all(engine)
+    # Add columns that may not exist in older DBs
+    _migrate_add_columns()
+
+
+def _migrate_add_columns():
+    """Add columns to existing tables if they don't exist."""
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(engine)
+    if "stretch_opportunities" in inspector.get_table_names():
+        cols = {c["name"] for c in inspector.get_columns("stretch_opportunities")}
+        if "strategy_set" not in cols:
+            with engine.begin() as conn:
+                conn.execute(
+                    text(
+                        "ALTER TABLE stretch_opportunities "
+                        "ADD COLUMN strategy_set VARCHAR DEFAULT 'default'"
+                    )
+                )
 
 
 def get_session():

@@ -14,7 +14,8 @@
         "fmt": "cd dashboard && pnpm fmt",
         "fmt:py": "uv run ruff format .",
         "typecheck": "cd dashboard && pnpm tsc --noEmit",
-        "typecheck:py": "uv run ty check"
+        "typecheck:py": "uv run ty check",
+        "pre-commit-check": "bash scripts/pre-commit-check.sh"
     },
     "dependencies": {
         "sst": "^4.2.2"
