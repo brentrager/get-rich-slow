@@ -6,7 +6,6 @@
         "dev": "sst dev",
         "dev:api": "uv run uvicorn api:app --host 0.0.0.0 --port 8000 --reload",
         "dev:dashboard": "cd dashboard && pnpm dev",
-
         "deploy": "assume smooai.dev && eval \"$(direnv export zsh 2>/dev/null)\" && npx sst deploy",
         "deploy:remove": "assume smooai.dev && eval \"$(direnv export zsh 2>/dev/null)\" && npx sst remove",
         "lint": "cd dashboard && pnpm lint",
@@ -15,9 +14,16 @@
         "fmt:py": "uv run ruff format .",
         "typecheck": "cd dashboard && pnpm tsc --noEmit",
         "typecheck:py": "uv run ty check",
-        "pre-commit-check": "bash scripts/pre-commit-check.sh"
+        "pre-commit-check": "bash scripts/pre-commit-check.sh",
+        "cli": "pnpm --filter cli start"
     },
     "dependencies": {
         "sst": "^4.2.2"
+    },
+    "pnpm": {
+        "onlyBuiltDependencies": [
+            "esbuild",
+            "sharp"
+        ]
     }
 }
