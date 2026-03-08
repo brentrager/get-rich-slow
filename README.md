@@ -21,22 +21,8 @@
 </p>
 
 <p align="center">
-  <a href="https://getrich.rager.tech"><img src="https://img.shields.io/badge/Live_Dashboard-getrich.rager.tech-F59E0B?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+PHBhdGggZD0iTTEyIDIwVjEwIi8+PHBhdGggZD0iTTE4IDIwVjQiLz48cGF0aCBkPSJNNiAyMHYtNCIvPjwvc3ZnPg==&logoColor=white" alt="Live Dashboard" /></a>
+  <a href="https://getrich.rager.tech"><img src="https://img.shields.io/badge/Live_Dashboard-getrich.rager.tech-F59E0B?style=for-the-badge&logoColor=white" alt="Live Dashboard" /></a>
   <a href="https://github.com/brentrager/get-rich-slow/actions"><img src="https://img.shields.io/github/actions/workflow/status/brentrager/get-rich-slow/ci.yml?style=for-the-badge&label=CI&color=22c55e" alt="CI" /></a>
-  <a href="https://github.com/brentrager/get-rich-slow"><img src="https://img.shields.io/github/license/brentrager/get-rich-slow?style=for-the-badge&color=64748b" alt="License" /></a>
-</p>
-
-<p align="center">
-  <img src="https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python" />
-  <img src="https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI" />
-  <img src="https://img.shields.io/badge/Next.js_16-000000?style=flat-square&logo=next.js&logoColor=white" alt="Next.js" />
-  <img src="https://img.shields.io/badge/React-61DAFB?style=flat-square&logo=react&logoColor=black" alt="React" />
-  <img src="https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white" alt="Tailwind" />
-  <img src="https://img.shields.io/badge/SQLite-003B57?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite" />
-  <img src="https://img.shields.io/badge/AWS_ECS-FF9900?style=flat-square&logo=amazonecs&logoColor=white" alt="AWS ECS" />
-  <img src="https://img.shields.io/badge/SST_v3-E27152?style=flat-square&logo=sst&logoColor=white" alt="SST" />
-  <img src="https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white" alt="Docker" />
-  <img src="https://img.shields.io/badge/WebSockets-010101?style=flat-square&logo=socketdotio&logoColor=white" alt="WebSockets" />
 </p>
 
 ---
@@ -54,27 +40,30 @@ The scanner watches live sports games across **NBA, NHL, MLB, NFL, MLS, Premier 
 
 ## Architecture
 
-```
-                    ┌─────────────────┐
-                    │   ESPN API      │  Game scores, periods, clocks
-                    │   (poll 10s)    │
-                    └────────┬────────┘
-                             │
-┌────────────────┐   ┌──────▼──────────┐   ┌──────────────────┐
-│ Kalshi WebSocket│──▶│    Scanner      │──▶│   SQLite (EFS)   │
-│ (real-time)    │   │  (Python/async) │   │ trades, balance, │
-│ ticker prices  │   │                 │   │ opportunities    │
-│ settlements    │   └──────┬──────────┘   └────────┬─────────┘
-└────────────────┘          │                       │
-                    ┌───────▼──────────┐   ┌────────▼─────────┐
-                    │  Kalshi REST API │   │  FastAPI Backend  │
-                    │  (discover 5s)   │   │  /api/*           │
-                    │  place orders    │   └────────┬─────────┘
-                    └──────────────────┘            │
-                                            ┌───────▼─────────┐
-                                            │  Next.js Dashboard│
-                                            │  getrich.rager.tech│
-                                            └─────────────────┘
+```mermaid
+graph TD
+    ESPN["<img src='https://cdn.simpleicons.org/espn/FF0000' width='16' /> ESPN API<br/><sub>scores, periods, clocks (10s poll)</sub>"]
+    KWS["<img src='https://cdn.simpleicons.org/socketdotio/010101' width='16' /> Kalshi WebSocket<br/><sub>real-time prices + settlements</sub>"]
+    KREST["Kalshi REST API<br/><sub>discover markets, place orders (5s)</sub>"]
+    SCANNER["<img src='https://cdn.simpleicons.org/python/3776AB' width='16' /> Scanner<br/><sub>Python / asyncio</sub>"]
+    DB["<img src='https://cdn.simpleicons.org/sqlite/003B57' width='16' /> SQLite on EFS<br/><sub>trades, balance, opportunities</sub>"]
+    API["<img src='https://cdn.simpleicons.org/fastapi/009688' width='16' /> FastAPI<br/><sub>/api/*</sub>"]
+    DASH["<img src='https://cdn.simpleicons.org/next.js/000000' width='16' /> Next.js Dashboard<br/><sub>getrich.rager.tech</sub>"]
+
+    ESPN --> SCANNER
+    KWS --> SCANNER
+    SCANNER --> DB
+    SCANNER --> KREST
+    DB --> API
+    API --> DASH
+
+    style ESPN fill:#1a1a2e,stroke:#FF0000,color:#fff
+    style KWS fill:#1a1a2e,stroke:#64748b,color:#fff
+    style KREST fill:#1a1a2e,stroke:#64748b,color:#fff
+    style SCANNER fill:#1a1a2e,stroke:#F59E0B,color:#fff
+    style DB fill:#1a1a2e,stroke:#003B57,color:#fff
+    style API fill:#1a1a2e,stroke:#009688,color:#fff
+    style DASH fill:#1a1a2e,stroke:#fff,color:#fff
 ```
 
 ### Real-Time Data Pipeline
@@ -85,11 +74,32 @@ The scanner watches live sports games across **NBA, NHL, MLB, NFL, MLS, Premier 
 | **Settlements** | Kalshi WebSocket | `market_lifecycle_v2` | Instant win/loss detection |
 | **Markets** | Kalshi REST API | Poll every 5s | Discover new markets, place orders |
 | **Game State** | ESPN API | Poll every 10s | Score, period, clock verification |
-| **Dashboard** | FastAPI + Next.js | REST → SSR | P&L tracking, live games, analytics |
+| **Dashboard** | FastAPI → Next.js | REST | P&L tracking, live games, analytics |
 
 ### What-If Strategy Tracking
 
 Five shadow strategies run in parallel — evaluating every market against different price thresholds, timing windows, and lead requirements. Each tracks hypothetical P&L so we can backtest parameter changes before risking real capital.
+
+## Tech Stack
+
+<table>
+  <tr>
+    <td align="center" width="96"><img src="https://cdn.simpleicons.org/python/3776AB" width="32" /><br><sub>Python 3.12</sub></td>
+    <td align="center" width="96"><img src="https://cdn.simpleicons.org/fastapi/009688" width="32" /><br><sub>FastAPI</sub></td>
+    <td align="center" width="96"><img src="https://cdn.simpleicons.org/sqlite/003B57" width="32" /><br><sub>SQLite</sub></td>
+    <td align="center" width="96"><img src="https://cdn.simpleicons.org/next.js/000000" width="32" /><br><sub>Next.js 16</sub></td>
+    <td align="center" width="96"><img src="https://cdn.simpleicons.org/react/61DAFB" width="32" /><br><sub>React 19</sub></td>
+    <td align="center" width="96"><img src="https://cdn.simpleicons.org/tailwindcss/06B6D4" width="32" /><br><sub>Tailwind CSS</sub></td>
+  </tr>
+  <tr>
+    <td align="center" width="96"><img src="https://cdn.simpleicons.org/docker/2496ED" width="32" /><br><sub>Docker</sub></td>
+    <td align="center" width="96"><img src="https://cdn.simpleicons.org/amazonecs/FF9900" width="32" /><br><sub>AWS ECS</sub></td>
+    <td align="center" width="96"><img src="https://cdn.simpleicons.org/sst/E27152" width="32" /><br><sub>SST v3</sub></td>
+    <td align="center" width="96"><img src="https://cdn.simpleicons.org/cloudflare/F38020" width="32" /><br><sub>Cloudflare</sub></td>
+    <td align="center" width="96"><img src="https://cdn.simpleicons.org/socketdotio/010101" width="32" /><br><sub>WebSockets</sub></td>
+    <td align="center" width="96"><img src="https://cdn.simpleicons.org/espn/FF0000" width="32" /><br><sub>ESPN API</sub></td>
+  </tr>
+</table>
 
 ## Dashboard
 
@@ -102,17 +112,86 @@ The dashboard at [getrich.rager.tech](https://getrich.rager.tech) shows:
 - **Strategy Comparison** — side-by-side what-if analysis across 5 parameter sets
 - **Stats** — win rate, realized P&L, open positions
 
-## Quick Start
+## Deployment
+
+### Prerequisites
+
+- [SST v3](https://sst.dev) + [pnpm](https://pnpm.io)
+- [uv](https://docs.astral.sh/uv/) (Python package manager)
+- AWS account (us-east-2)
+- Cloudflare account (DNS)
+- [Kalshi API keys](https://kalshi.com/sign-up/api)
+
+### Secrets
+
+SST secrets must be set before first deploy:
 
 ```bash
-# Local development (Docker)
-pnpm dev
-
-# Deploy to AWS
-pnpm deploy
+npx sst secret set KalshiApiKey "your-kalshi-api-key-id"
+npx sst secret set KalshiPrivateKey "-----BEGIN RSA PRIVATE KEY-----\n..."
+npx sst secret set DashboardPassword "your-dashboard-password"
+npx sst secret set ApiToken "your-api-bearer-token"
 ```
 
-Requires Kalshi API keys (`KALSHI_API_KEY`, `KALSHI_PRIVATE_KEY`) and AWS credentials.
+### Infrastructure
+
+SST provisions everything in `sst.config.ts`:
+
+| Resource | What | Notes |
+|:---------|:-----|:------|
+| **VPC** | Networking with NAT | EC2-based NAT to save cost |
+| **ECS Cluster** | Container orchestration | Single service runs API + Scanner |
+| **EFS** | Persistent storage | SQLite database lives here |
+| **S3 Bucket** | DB backups | Periodic SQLite snapshots |
+| **Next.js (SST)** | Dashboard | Lambda + CloudFront via OpenNext |
+| **Cloudflare DNS** | Domain routing | `getrich.rager.tech` + `getrich-api.rager.tech` |
+
+### Commands
+
+```bash
+# Deploy to AWS (requires AWS creds + Cloudflare token in .envrc)
+pnpm deploy
+
+# Local development (Docker Compose)
+pnpm dev
+
+# Run API locally (without Docker)
+pnpm dev:api
+
+# Tear down all infrastructure
+pnpm deploy:remove
+```
+
+### Runtime Configuration
+
+The scanner reads config from the database at startup. Update settings via the API:
+
+```bash
+# Update a config value (requires API_TOKEN)
+curl -X PUT https://getrich-api.rager.tech/api/config \
+  -H "Authorization: Bearer $API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"key": "trading.min_yes_price", "value": "92"}'
+
+# View current config
+curl https://getrich-api.rager.tech/api/config \
+  -H "Authorization: Bearer $API_TOKEN"
+```
+
+## Development
+
+```bash
+# Format + lint Python
+uv run ruff format . && uv run ruff check . && uv run ty check
+
+# Format + lint TypeScript
+cd dashboard && pnpm oxfmt . && pnpm oxlint
+
+# Build dashboard
+cd dashboard && pnpm build
+```
+
+A pre-commit hook runs automatically: formats Python (ruff) and TypeScript (oxfmt), then type-checks with ty.
 
 ---
 
