@@ -14,7 +14,10 @@ DATABASE_URL = os.getenv(
     f"sqlite:///{_default_db}",
 )
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+# `check_same_thread` is a SQLite-only connect arg — psycopg2 (Postgres/Supabase)
+# rejects unknown options, so only pass it for SQLite. (SMOODEV-1808)
+_connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+engine = create_engine(DATABASE_URL, connect_args=_connect_args)
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
